@@ -50,7 +50,7 @@ importlib-metadata==8.5.0
 importlib-resources==6.4.5
 # Editable install with no version control (isaacgym==1.0rc4)
 #-e /home/exps/Projects/rohan/IsaacGym_Preview_4_Package/isaacgym/python
-jaxlib==4.13
+jaxlib
 jinja2==3.1.6
 kiwisolver==1.4.7
 labmaze==1.0.6
