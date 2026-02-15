@@ -7,17 +7,20 @@ import os
 _isaac_sim_launched = False
 _simulation_app = None
 
+
 def ensure_isaac_sim():
     """Launch Isaac Sim if not already launched"""
     global _isaac_sim_launched, _simulation_app
-    
+
     if not _isaac_sim_launched:
         from isaaclab.app import AppLauncher
+
         app_launcher = AppLauncher(headless=True)
         _simulation_app = app_launcher.app
         _isaac_sim_launched = True
-    
+
     return _simulation_app
+
 
 # Import other dependencies that don't need Isaac Sim
 import numpy as np
@@ -25,54 +28,94 @@ import torch
 from tqdm import tqdm
 from reward import rewards
 from utils import compute_mean_std, load_hdf5_dataset
+from isaac_compatibility import (
+    build_default_dof_pos,
+    isaac_default_joint_angles,
+    grand_tour_default_joint_angles,
+    DOF_NAMES,
+)
+
+
+def compute_joint_pos_offset():
+    """
+    Compute the offset between IsaacLab and GrandTour default joint angles.
+    This offset needs to be added to IsaacLab observations to convert them
+    to GrandTour format (what the policy was trained on).
+
+    Returns:
+        np.ndarray: Offset of shape (12,) to add to joint position observations (indices 12-23)
+    """
+    offset = np.zeros(12, dtype=np.float32)
+    for i, name in enumerate(DOF_NAMES):
+        isaac_default = isaac_default_joint_angles[name]
+        gt_default = grand_tour_default_joint_angles[name]
+        offset[i] = isaac_default - gt_default  # IsaacLab - GrandTour
+    return offset
+
 
 class OnlineEval:
-    def __init__(self, task_name, seed, dataset_path="offline_dataset_pp.hdf5", 
-                 normalize=False, include_prev_actions=False):
-        
+    def __init__(
+        self,
+        task_name,
+        seed,
+        dataset_path="offline_dataset_pp.hdf5",
+        normalize=False,
+        include_prev_actions=False,
+        apply_centering_offset=True,
+    ):
         # Ensure Isaac Sim is launched
         ensure_isaac_sim()
-        
+
         # NOW import Isaac Lab modules (after Sim is running)
         from isaaclab.envs import ManagerBasedRLEnv
         import isaaclab_tasks
         from isaaclab_tasks.utils import parse_env_cfg
-        
+
         self.include_prev_actions = include_prev_actions
         self.normalize = normalize
-        
+        self.apply_centering_offset = apply_centering_offset
+
+        # Compute and store the joint position offset for centering correction
+        # IsaacLab centers on standing pose defaults, but policy was trained on GrandTour defaults
+        if self.apply_centering_offset:
+            joint_pos_offset = compute_joint_pos_offset()
+            print(f"Applying joint position centering offset: {joint_pos_offset}")
+            self.joint_pos_offset = torch.tensor(joint_pos_offset, dtype=torch.float32)
+        else:
+            self.joint_pos_offset = None
+
         # Parse environment configuration
         env_cfg = parse_env_cfg(
             task_name,
             device="cuda:0",
             num_envs=2,
         )
-        
-        '''
+
+        """
         # Disable curriculum and noise if needed
         if hasattr(env_cfg, 'curriculum'):
             env_cfg.curriculum.terrain_levels = False
-        '''
+        """
 
-        if hasattr(env_cfg, 'observations'):
-            if hasattr(env_cfg.observations, 'enable_corruption'):
+        if hasattr(env_cfg, "observations"):
+            if hasattr(env_cfg.observations, "enable_corruption"):
                 env_cfg.observations.enable_corruption = False
-        
+
         # Create environment
         print(f">>>>>> :{env_cfg}")
         env = ManagerBasedRLEnv(cfg=env_cfg)
-        
+
         self.env_cfg = env_cfg
         self.env = env
         self.dt = env.step_dt
-        
+
         # Load normalization stats
         if self.normalize:
             dataset = load_hdf5_dataset(dataset_path)
             self.state_mean, self.state_std = compute_mean_std(
                 dataset["observations"], eps=1e-3
             )
-    
+
     def calculate_total_reward(self, rewbuffer, ep_infos, lenbuffer):
         """Calculate mean reward from episode buffers"""
         if len(rewbuffer) > 0:
@@ -81,7 +124,7 @@ class OnlineEval:
         else:
             avg_total_ep_rew = 0.0
             avg_episode_length = 0.0
-        
+
         scaled_rew_terms_avg = {}
         if ep_infos:
             for key in ep_infos[0].keys():
@@ -94,23 +137,27 @@ class OnlineEval:
                         value = np.array([value])
                     if value.ndim == 0:
                         value = np.expand_dims(value, 0)
-                    
+
                     if len(infotensor) == 0:
                         infotensor = value
                     else:
                         infotensor = np.concatenate((infotensor, value))
-                
+
                 value = np.mean(infotensor)
                 scaled_rew_terms_avg[key] = float(value)
-        
-        return avg_total_ep_rew, len(rewbuffer), scaled_rew_terms_avg, avg_episode_length
-   
+
+        return (
+            avg_total_ep_rew,
+            len(rewbuffer),
+            scaled_rew_terms_avg,
+            avg_episode_length,
+        )
+
     @torch.no_grad()
     def eval_actor_isaac(self, actor: torch.nn.Module, device: str = "cuda") -> tuple:
-        
         actor.eval()
         env = self.env
-        
+
         # Reset - handle dict return
         reset_result = env.reset()
         if isinstance(reset_result, tuple):
@@ -118,17 +165,25 @@ class OnlineEval:
             obs = obs_dict["policy"] if isinstance(obs_dict, dict) else obs_dict
         else:
             obs = reset_result
-        
+
         if not self.include_prev_actions and obs.shape[-1] > 36:
             obs = obs[:, :-12]
-        
+
         num_envs = env.num_envs
-        max_steps = int(env.max_episode_length_s / env.step_dt) if hasattr(env, 'max_episode_length_s') else 1000
-        
+        max_steps = (
+            int(env.max_episode_length_s / env.step_dt)
+            if hasattr(env, "max_episode_length_s")
+            else 1000
+        )
+
         if self.normalize:
-            state_mean_torch = torch.tensor(self.state_mean, dtype=torch.float32, device=device)
-            state_std_torch = torch.tensor(self.state_std, dtype=torch.float32, device=device)
-        
+            state_mean_torch = torch.tensor(
+                self.state_mean, dtype=torch.float32, device=device
+            )
+            state_std_torch = torch.tensor(
+                self.state_std, dtype=torch.float32, device=device
+            )
+
         cur_reward_sum = torch.zeros(num_envs, dtype=torch.float, device=device)
         episode_lengths = torch.zeros(num_envs, dtype=torch.long, device=device)
         rewbuffer = []
@@ -137,82 +192,112 @@ class OnlineEval:
         obs_stats_list = []
         obs_all_list = []
         actions_all_list = []
-        
+
         for i in range(max_steps + 2):
-            obs_normalized = (obs - state_mean_torch) / state_std_torch if self.normalize else obs
-            
-            obs_stats_list.append({
-                'mean': obs.mean().item(),
-                'std': obs.std().item(),
-                'min': obs.min().item(),
-                'max': obs.max().item(),
-            })
+            # Apply centering offset to convert IsaacLab observations to GrandTour format
+            # This corrects for the difference in default joint angles between IsaacLab and GrandTour
+            if self.apply_centering_offset and self.joint_pos_offset is not None:
+                offset = self.joint_pos_offset.to(obs.device)
+                obs[:, 12:24] = obs[:, 12:24] + offset
+
+            obs_normalized = (
+                (obs - state_mean_torch) / state_std_torch if self.normalize else obs
+            )
+
+            obs_stats_list.append(
+                {
+                    "mean": obs.mean().item(),
+                    "std": obs.std().item(),
+                    "min": obs.min().item(),
+                    "max": obs.max().item(),
+                }
+            )
             obs_all_list.append(obs.cpu().numpy())
-            
+
             actions = actor.act_inference(obs_normalized.detach())
             actions_all_list.append(actions.cpu().numpy())
-            
+
             step_result = env.step(actions.detach())
-            
+
             if len(step_result) == 5:
                 obs_dict, rew, terminated, truncated, infos = step_result
                 obs = obs_dict["policy"] if isinstance(obs_dict, dict) else obs_dict
                 dones = terminated | truncated
             else:
                 obs, _, rew, dones, infos = step_result
-            
+
             if not self.include_prev_actions and obs.shape[-1] > 36:
                 obs = obs[:, :-12]
-            
+
             if rew.dim() > 1:
                 rew = rew.squeeze()
-            
+
             cur_reward_sum += rew
             episode_lengths += 1
-            
+
             if dones.dim() > 1:
                 dones = dones.squeeze()
             done_indices = torch.where(dones == 1)[0]
-            
+
             if len(done_indices) > 0:
                 rewbuffer.extend(cur_reward_sum[done_indices].cpu().numpy().tolist())
                 lenbuffer.extend(episode_lengths[done_indices].cpu().numpy().tolist())
                 cur_reward_sum[done_indices] = 0
                 episode_lengths[done_indices] = 0
-                
+
                 if "episode" in infos:
                     ep_infos.append(infos["episode"])
-        
+
         actor.train()
-        
+
         if obs_stats_list:
-            avg_obs_mean = np.mean([s['mean'] for s in obs_stats_list])
-            avg_obs_std = np.mean([s['std'] for s in obs_stats_list])
-            avg_obs_min = np.mean([s['min'] for s in obs_stats_list])
-            avg_obs_max = np.mean([s['max'] for s in obs_stats_list])
-            
+            avg_obs_mean = np.mean([s["mean"] for s in obs_stats_list])
+            avg_obs_std = np.mean([s["std"] for s in obs_stats_list])
+            avg_obs_min = np.mean([s["min"] for s in obs_stats_list])
+            avg_obs_max = np.mean([s["max"] for s in obs_stats_list])
+
             obs_all_array = np.concatenate(obs_all_list, axis=0)
             obs_mean_per_dim = obs_all_array.mean(axis=0)
-            obs_mean_per_dim_dict = {f'isaac_obs_mean_dim_{i}': float(val) for i, val in enumerate(obs_mean_per_dim)}
-            
+            obs_mean_per_dim_dict = {
+                f"isaac_obs_mean_dim_{i}": float(val)
+                for i, val in enumerate(obs_mean_per_dim)
+            }
+
             actions_all_array = np.concatenate(actions_all_list, axis=0)
             actions_mean_per_dim = actions_all_array.mean(axis=0)
-            actions_mean_per_dim_dict = {f'isaac_action_mean_dim_{i}': float(val) for i, val in enumerate(actions_mean_per_dim)}
-            
-            eval_score, n_eps_evaluated, scaled_rew_terms_avg, avg_episode_length = \
+            actions_mean_per_dim_dict = {
+                f"isaac_action_mean_dim_{i}": float(val)
+                for i, val in enumerate(actions_mean_per_dim)
+            }
+
+            eval_score, n_eps_evaluated, scaled_rew_terms_avg, avg_episode_length = (
                 self.calculate_total_reward(rewbuffer, ep_infos, lenbuffer)
-            
+            )
+
             obs_stats = {
-                'isaac_obs_mean': avg_obs_mean,
-                'isaac_obs_std': avg_obs_std,
-                'isaac_obs_min': avg_obs_min,
-                'isaac_obs_max': avg_obs_max,
+                "isaac_obs_mean": avg_obs_mean,
+                "isaac_obs_std": avg_obs_std,
+                "isaac_obs_min": avg_obs_min,
+                "isaac_obs_max": avg_obs_max,
                 **obs_mean_per_dim_dict,
                 **actions_mean_per_dim_dict,
             }
-            
-            return eval_score, n_eps_evaluated, scaled_rew_terms_avg, avg_episode_length, obs_stats
+
+            return (
+                eval_score,
+                n_eps_evaluated,
+                scaled_rew_terms_avg,
+                avg_episode_length,
+                obs_stats,
+            )
         else:
-            eval_score, n_eps_evaluated, scaled_rew_terms_avg, avg_episode_length = \
+            eval_score, n_eps_evaluated, scaled_rew_terms_avg, avg_episode_length = (
                 self.calculate_total_reward(rewbuffer, ep_infos, lenbuffer)
-            return eval_score, n_eps_evaluated, scaled_rew_terms_avg, avg_episode_length, {}
+            )
+            return (
+                eval_score,
+                n_eps_evaluated,
+                scaled_rew_terms_avg,
+                avg_episode_length,
+                {},
+            )
