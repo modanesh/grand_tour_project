@@ -121,7 +121,7 @@ class OnlineEval:
         env_cfg = parse_env_cfg(
             task_name,
             device="cuda:0",
-            num_envs=2,
+            num_envs=4096,
         )
 
         """
