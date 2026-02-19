@@ -30,9 +30,17 @@ from reward import rewards
 from utils import compute_mean_std, load_hdf5_dataset
 from isaac_compatibility import (
     build_default_dof_pos,
+    build_grand_tour_default_dof_pos,
     isaac_default_joint_angles,
     grand_tour_default_joint_angles,
     DOF_NAMES,
+    action_scale,
+    make_actions_compatible,
+)
+from grandtour_compatibility import (
+    unscale_observations,
+    unscale_joint_pos,
+    unscale_previous_actions,
 )
 
 
@@ -51,6 +59,26 @@ def compute_joint_pos_offset():
         gt_default = grand_tour_default_joint_angles[name]
         offset[i] = isaac_default - gt_default  # IsaacLab - GrandTour
     return offset
+
+
+def verify_joint_ordering(obs_joint_pos, expected_defaults, tolerance=0.1):
+    """
+    Verify if the joint positions match the expected ordering.
+    
+    IsaacLab observations contain relative joint positions: (joint_pos - default_pos) * scale
+    At initialization/reset, joint_pos should equal default_pos, so obs_joint_pos should be near 0.
+    
+    Args:
+        obs_joint_pos: Observed joint positions from IsaacLab (indices 12:24)
+        expected_defaults: Expected default joint angles (GrandTour defaults)
+        tolerance: Tolerance for matching
+    
+    Returns:
+        bool: True if ordering appears correct
+    """
+    # Check if observed values are close to expected (allowing for some noise/scaling)
+    diff = np.abs(obs_joint_pos - expected_defaults)
+    return np.all(diff < tolerance)
 
 
 class OnlineEval:
@@ -83,6 +111,10 @@ class OnlineEval:
             self.joint_pos_offset = torch.tensor(joint_pos_offset, dtype=torch.float32)
         else:
             self.joint_pos_offset = None
+
+        # Store flag for full observation un-scaling (IsaacLab -> GrandTour)
+        # IsaacLab observations are scaled; GrandTour policy expects unscaled observations
+        self.unscale_observations = True
 
         # Parse environment configuration
         env_cfg = parse_env_cfg(
@@ -183,6 +215,9 @@ class OnlineEval:
             state_std_torch = torch.tensor(
                 self.state_std, dtype=torch.float32, device=device
             )
+        else:
+            state_mean_torch = None
+            state_std_torch = None
 
         cur_reward_sum = torch.zeros(num_envs, dtype=torch.float, device=device)
         episode_lengths = torch.zeros(num_envs, dtype=torch.long, device=device)
@@ -193,12 +228,56 @@ class OnlineEval:
         obs_all_list = []
         actions_all_list = []
 
+        # Debug: Print initial observation stats to verify joint ordering
+        first_obs = True
+        
         for i in range(max_steps + 2):
-            # Apply centering offset to convert IsaacLab observations to GrandTour format
-            # This corrects for the difference in default joint angles between IsaacLab and GrandTour
-            if self.apply_centering_offset and self.joint_pos_offset is not None:
+            # Convert IsaacLab observations to GrandTour format
+            # This includes un-scaling velocities/commands and converting joint positions
+            if self.unscale_observations:
+                obs = unscale_observations(obs, device=obs.device)
+            elif self.apply_centering_offset and self.joint_pos_offset is not None:
+                # Fallback: only apply joint position offset (legacy behavior)
                 offset = self.joint_pos_offset.to(obs.device)
                 obs[:, 12:24] = obs[:, 12:24] + offset
+
+            # Debug: Check joint ordering on first observation
+            if first_obs and i == 0:
+                print(f"\n=== Observation Debug (step {i}) ===")
+                print(f"Base lin vel [0:3]: {obs[0, 0:3].cpu().numpy()}")
+                print(f"Base ang vel [3:6]: {obs[0, 3:6].cpu().numpy()}")
+                print(f"Joint pos [12:24]: {obs[0, 12:24].cpu().numpy()}")
+                gt_defaults = torch.tensor(build_grand_tour_default_dof_pos(), device=obs.device, dtype=obs.dtype)
+                print(f"Expected GT defaults: {gt_defaults.cpu().numpy()}")
+                diff = (obs[0, 12:24] - gt_defaults).cpu().numpy()
+                print(f"Joint pos diff from GT defaults: {diff}")
+                
+                # Fail loudly if joint ordering mismatch detected
+                # At reset, joint positions should be close to GT defaults (within reasonable tolerance)
+                # Large differences indicate wrong joint ordering
+                max_diff = np.max(np.abs(diff))
+                tolerance = 0.5  # rad - reasonable tolerance for initial pose
+                if max_diff > tolerance:
+                    error_msg = (
+                        f"\n{'='*60}\n"
+                        f"JOINT ORDERING MISMATCH DETECTED!\n"
+                        f"{'='*60}\n"
+                        f"Max joint position difference: {max_diff:.4f} rad (tolerance: {tolerance} rad)\n"
+                        f"\nObserved joint positions: {obs[0, 12:24].cpu().numpy()}\n"
+                        f"Expected GT defaults:     {gt_defaults.cpu().numpy()}\n"
+                        f"Difference:               {diff}\n"
+                        f"\nPossible causes:\n"
+                        f"1. IsaacLab joint order differs from DOF_NAMES order\n"
+                        f"2. Robot spawned in unexpected initial pose\n"
+                        f"3. Joint position scaling/conversion error\n"
+                        f"\nDOF_NAMES order (isaac_compatibility.py):\n"
+                        f"  {DOF_NAMES}\n"
+                        f"{'='*60}"
+                    )
+                    raise RuntimeError(error_msg)
+                print(f"✓ Joint ordering check passed (max diff: {max_diff:.4f} rad)")
+                print("=====================================\n")
+                first_obs = False
 
             obs_normalized = (
                 (obs - state_mean_torch) / state_std_torch if self.normalize else obs
@@ -214,10 +293,15 @@ class OnlineEval:
             )
             obs_all_list.append(obs.cpu().numpy())
 
+            # Policy outputs actions in GrandTour format (absolute positions)
             actions = actor.act_inference(obs_normalized.detach())
             actions_all_list.append(actions.cpu().numpy())
+            
+            # Convert actions from GrandTour format (absolute) to IsaacLab format (offsets)
+            # IsaacLab expects: action = (target_pos - default_pos) / action_scale
+            actions_isaaclab = make_actions_compatible(actions)
 
-            step_result = env.step(actions.detach())
+            step_result = env.step(actions_isaaclab.detach())
 
             if len(step_result) == 5:
                 obs_dict, rew, terminated, truncated, infos = step_result
