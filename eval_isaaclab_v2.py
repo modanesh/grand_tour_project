@@ -30,6 +30,7 @@ from reward import rewards
 from utils import compute_mean_std, load_hdf5_dataset
 from isaac_compatibility import (
     build_default_dof_pos,
+    build_isaac_default_dof_pos,
     build_grand_tour_default_dof_pos,
     isaac_default_joint_angles,
     grand_tour_default_joint_angles,
@@ -247,25 +248,30 @@ class OnlineEval:
                 print(f"Base lin vel [0:3]: {obs[0, 0:3].cpu().numpy()}")
                 print(f"Base ang vel [3:6]: {obs[0, 3:6].cpu().numpy()}")
                 print(f"Joint pos [12:24]: {obs[0, 12:24].cpu().numpy()}")
+                
+                # Check against IsaacLab defaults (robot spawns in standing pose)
+                isaac_defaults = torch.tensor(build_isaac_default_dof_pos(), device=obs.device, dtype=obs.dtype)
+                print(f"IsaacLab defaults: {isaac_defaults.cpu().numpy()}")
+                diff_isaac = (obs[0, 12:24] - isaac_defaults).cpu().numpy()
+                print(f"Joint pos diff from IsaacLab defaults: {diff_isaac}")
+                
+                # Also show GT defaults for reference
                 gt_defaults = torch.tensor(build_grand_tour_default_dof_pos(), device=obs.device, dtype=obs.dtype)
-                print(f"Expected GT defaults: {gt_defaults.cpu().numpy()}")
-                diff = (obs[0, 12:24] - gt_defaults).cpu().numpy()
-                print(f"Joint pos diff from GT defaults: {diff}")
+                print(f"GT defaults: {gt_defaults.cpu().numpy()}")
                 
                 # Fail loudly if joint ordering mismatch detected
-                # At reset, joint positions should be close to GT defaults (within reasonable tolerance)
-                # Large differences indicate wrong joint ordering
-                max_diff = np.max(np.abs(diff))
+                # At reset, joint positions should be close to IsaacLab defaults (standing pose)
+                max_diff = np.max(np.abs(diff_isaac))
                 tolerance = 0.5  # rad - reasonable tolerance for initial pose
                 if max_diff > tolerance:
                     error_msg = (
                         f"\n{'='*60}\n"
                         f"JOINT ORDERING MISMATCH DETECTED!\n"
                         f"{'='*60}\n"
-                        f"Max joint position difference: {max_diff:.4f} rad (tolerance: {tolerance} rad)\n"
+                        f"Max joint position difference from IsaacLab defaults: {max_diff:.4f} rad (tolerance: {tolerance} rad)\n"
                         f"\nObserved joint positions: {obs[0, 12:24].cpu().numpy()}\n"
-                        f"Expected GT defaults:     {gt_defaults.cpu().numpy()}\n"
-                        f"Difference:               {diff}\n"
+                        f"Expected IsaacLab defaults: {isaac_defaults.cpu().numpy()}\n"
+                        f"Difference: {diff_isaac}\n"
                         f"\nPossible causes:\n"
                         f"1. IsaacLab joint order differs from DOF_NAMES order\n"
                         f"2. Robot spawned in unexpected initial pose\n"
@@ -275,7 +281,7 @@ class OnlineEval:
                         f"{'='*60}"
                     )
                     raise RuntimeError(error_msg)
-                print(f"✓ Joint ordering check passed (max diff: {max_diff:.4f} rad)")
+                print(f"✓ Joint ordering check passed (max diff from IsaacLab defaults: {max_diff:.4f} rad)")
                 print("=====================================\n")
                 first_obs = False
 
