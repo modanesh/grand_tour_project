@@ -102,14 +102,14 @@ def unscale_observations(obs_isaac, device="cpu"):
     """
     Unscale full observation vector from Isaac Gym format to GrandTour format.
     
-    Observation structure (48 dims, no height measurements):
+    Observation structure (36 or 48 dims, no height measurements):
     - [0:3]: base_lin_vel (scaled by 2.0)
     - [3:6]: base_ang_vel (scaled by 0.25)
     - [6:9]: projected_gravity (no scaling)
     - [9:12]: commands (scaled by [2.0, 2.0, 0.25])
     - [12:24]: dof_pos (scaled as (dof_pos - default_dof_pos) * 1.0)
     - [24:36]: dof_vel (scaled by 0.05)
-    - [36:48]: previous actions (stored as offsets, need to convert to absolute positions)
+    - [36:48]: previous actions (stored as offsets, need to convert to absolute positions) [optional]
     
     Args:
         obs_isaac: Observations from Isaac Gym (torch.Tensor or np.ndarray)
@@ -119,6 +119,7 @@ def unscale_observations(obs_isaac, device="cpu"):
         Observations in GrandTour format (same type as input)
     """
     is_torch = isinstance(obs_isaac, torch.Tensor)
+    obs_dim = obs_isaac.shape[-1]
     
     if is_torch:
         obs_gt = obs_isaac.clone()
@@ -142,7 +143,8 @@ def unscale_observations(obs_isaac, device="cpu"):
     # Unscale dof_vel [24:36]
     obs_gt[..., 24:36] = unscale_joint_vel(obs_gt[..., 24:36])
     
-    # Unscale previous actions [36:48] - convert from offsets to absolute positions
-    obs_gt[..., 36:48] = unscale_previous_actions(obs_gt[..., 36:48])
+    # Unscale previous actions [36:48] if present
+    if obs_dim >= 48:
+        obs_gt[..., 36:48] = unscale_previous_actions(obs_gt[..., 36:48])
     
     return obs_gt
