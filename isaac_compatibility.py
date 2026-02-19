@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 """ To make the GrandTour dataset data compatible with Isaac Gym """
 
@@ -130,8 +131,25 @@ def make_actions_compatible(absolute_positions):
     
     Uses Grand Tour defaults so actions are centered around 0 for GT data.
     At inference, Isaac Gym must also use Grand Tour defaults.
+    
+    Args:
+        absolute_positions: Joint positions in absolute format (torch.Tensor or np.ndarray)
+    
+    Returns:
+        Actions in IsaacLab format (offset from defaults, scaled by action_scale)
     """
     default_dof_pos = build_grand_tour_default_dof_pos()
+    
+    if isinstance(absolute_positions, torch.Tensor):
+        # Convert defaults to torch tensor on same device
+        default_dof_pos_torch = torch.tensor(
+            default_dof_pos,
+            device=absolute_positions.device,
+            dtype=absolute_positions.dtype
+        )
+        return (absolute_positions - default_dof_pos_torch) / action_scale
+    
+    # Numpy path
     return (absolute_positions - default_dof_pos) / action_scale
 
 def scale_lin_vel(lin_vel):
