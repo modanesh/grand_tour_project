@@ -141,8 +141,9 @@ def unscale_observations(obs_isaac, device="cpu"):
     
     # Unscale dof_vel [24:36]
     obs_gt[..., 24:36] = unscale_joint_vel(obs_gt[..., 24:36])
-    
-    # Unscale previous actions [36:48] - convert from offsets to absolute positions
-    obs_gt[..., 36:48] = unscale_previous_actions(obs_gt[..., 36:48])
+   
+    if obs_gt.shape[-1] >= 48:
+        # Unscale previous actions [36:48] - convert from offsets to absolute positions
+        obs_gt[..., 36:48] = unscale_previous_actions(obs_gt[..., 36:48])
     
     return obs_gt

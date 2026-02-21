@@ -99,7 +99,7 @@ task:
   action_dim: 12
   dataset:
     _target_: diffusion_policy.dataset.anymal_dataset.AnymalDataset
-    hdf5_path: offline_dataset.hdf5  # Your HDF5 dataset
+    hdf5_path: expert_dataset.hdf5  # Your HDF5 dataset
     horizon: 16
     pad_after: 7
     pad_before: 1
@@ -112,7 +112,7 @@ task:
     task_name: anymal_d_flat
     seed: 27
     normalize: false
-    dataset_path: offline_dataset.hdf5
+    dataset_path: expert_dataset.hdf5
   name: anymal_lowdim
   obs_dim: 36
 

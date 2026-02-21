@@ -143,8 +143,10 @@ class OnlineEval:
         env_cfg = self.env_cfg
 
         obs = env.get_observations()
-        #obs = obs[:, :-12]  # Remove last 12 dimensions (prev_actions)
+        obs = obs[:, :-12]  # Remove last 12 dimensions (prev_actions)
         
+        print("removed last 12 observations")
+
         logger = Logger(env.dt) # note env.dt = 0.0199999 
         robot_index = 0  # which robot is used for logging
         joint_index = 1  # which joint is used for logging
@@ -182,7 +184,8 @@ class OnlineEval:
         for i in range(num_repetitions * int(max_episode_length)+2):
         #for i in tqdm(range(num_repetitions * int(max_episode_length)+2),desc="Online IG Eval"):
 
-            obs = unscale_observations(obs, device=device)
+            # TODO: commented by Laurence (2026-FEB-21)
+            # obs = unscale_observations(obs, device=device)
 
             # Normalize observations before feeding to actor
             if self.normalize:
@@ -214,7 +217,7 @@ class OnlineEval:
                 actions_all_list.append(actions_np)
             
             obs, _, rews, dones, infos = env.step(actions_isaac.detach())
-            #obs = obs[:, :-12]  # Remove last 12 dimensions (prev_actions)
+            obs = obs[:, :-12]  # Remove last 12 dimensions (prev_actions)
 
             # Accumulate rewards per environment (matching OnPolicyRunner approach)
             cur_reward_sum += rews.squeeze()
