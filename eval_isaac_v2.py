@@ -209,7 +209,8 @@ class OnlineEval:
             # Convert actions from absolute positions (GrandTour format) to offsets (Isaac Gym format)
             # Policy outputs absolute positions, but Isaac Gym expects normalized offsets
             actions_np = actions.detach().cpu().numpy()
-            actions_isaac = make_actions_compatible(actions_np)
+            #actions_isaac = make_actions_compatible(actions_np)
+            actions_isaac = actions_np
             actions_isaac = torch.tensor(actions_isaac, device=actions.device, dtype=actions.dtype)
             
             # Store actions for per-dimension analysis (from policy output, before conversion)
