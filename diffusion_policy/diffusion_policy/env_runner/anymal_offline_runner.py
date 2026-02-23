@@ -3,6 +3,7 @@ import torch
 import h5py
 import json
 from collections import deque
+from tqdm import tqdm
 from diffusion_policy.env_runner.base_runner import BaseLowdimRunner
 
 class AnymalOfflineRunner(BaseLowdimRunner):
@@ -47,10 +48,19 @@ class AnymalOfflineRunner(BaseLowdimRunner):
         per_mission_ate = {}
         per_mission_rte = {}
 
+        # Count test missions for progress bar
+        test_episode_count = sum(1 for ep_idx, _ in enumerate(zip(episode_starts, episode_ends))
+                                  if ep_to_mission.get(str(ep_idx), '') in self.test_missions)
+
+        pbar = tqdm(total=test_episode_count, desc='Evaluating missions', unit='episode')
+
         for ep_idx, (ep_start, ep_end) in enumerate(zip(episode_starts, episode_ends)):
             mission = ep_to_mission.get(str(ep_idx), '')
             if mission not in self.test_missions:
                 continue
+
+            pbar.update(1)
+            pbar.set_description(f'Evaluating {mission}')
 
             gt_obs = all_obs[ep_start:ep_end]       # (L, 36)
             gt_actions = all_actions[ep_start:ep_end]  # (L, 12)
@@ -90,6 +100,8 @@ class AnymalOfflineRunner(BaseLowdimRunner):
                 per_mission_rte[mission] = []
             per_mission_ate[mission].append(ate)
             per_mission_rte[mission].append(rte)
+
+        pbar.close()
 
         # Aggregate across missions
         all_ates = [v for vals in per_mission_ate.values() for v in vals]
