@@ -148,7 +148,7 @@ def load_aligned_data(input_path="aligned_data.zarr"):
     print(f"Loaded aligned data from {input_path}\n")
     return aligned
 
-def align_data(topics = None, save_aligned=False): 
+def align_data(topics = None, save_aligned=False):
 
     dataset_folder = Path("~/Projects/rohan/grand_tour_project/grand_tour_code/missions").expanduser()
     missions = [d.name for d in dataset_folder.iterdir() if d.is_dir()]
@@ -169,6 +169,7 @@ def align_data(topics = None, save_aligned=False):
     TARGET_HZ = 50.0
     DT = 1.0 / TARGET_HZ
     aligned = {}
+    mission_timesteps = {}  # NEW: ordered dict {mission_name: n_timesteps}
 
     idx = 1
     for mission in missions:
@@ -178,13 +179,16 @@ def align_data(topics = None, save_aligned=False):
         mission_folder = dataset_folder / mission
         mission_root = zarr.open_group(store=mission_folder / "data", mode='r')
 
+        aligned_tmp = align_mission_to_50hz(mission_root, topics, DT, TARGET_HZ)
+        n_steps = len(aligned_tmp["t"])  # number of 50Hz timesteps in this mission
+        mission_timesteps[mission] = n_steps  # NEW
+
         if idx == 1:
-            # init aligned data 
-            aligned = align_mission_to_50hz(mission_root, topics, DT, TARGET_HZ)
+            # init aligned data
+            aligned = aligned_tmp
 
         else:
-            # build aligned data 
-            aligned_tmp = align_mission_to_50hz(mission_root, topics, DT, TARGET_HZ)
+            # build aligned data
             for k in list(aligned_tmp["sensors"].keys()):
                 for k2 in list(aligned_tmp["sensors"][k].keys()):
                     aligned["sensors"][k][k2] = np.concatenate((aligned["sensors"][k][k2], aligned_tmp["sensors"][k][k2]), axis=0)
@@ -194,7 +198,7 @@ def align_data(topics = None, save_aligned=False):
     print("\nAlignment done.\n")
     if save_aligned:
         save_aligned_data(aligned, output_path="aligned_data.zarr")
-    return aligned
+    return aligned, mission_timesteps  # NEW: return tuple
 
 if __name__ == "__main__":
-    align_data(topics=None, save_aligned=True)
+    aligned, mission_timesteps = align_data(topics=None, save_aligned=True)

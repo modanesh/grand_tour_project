@@ -1,6 +1,8 @@
 from align_data import align_data, load_aligned_data
 from build_dataset import build_offline_dataset, save_offline_dataset_hdf5, episode_returns, DatasetConfig
 import numpy as np
+import json
+from collections import OrderedDict
 
 print("\nBuilding Offline Dataset...")
 topics = [
@@ -14,8 +16,8 @@ topics = [
             #"hdr_right"
         ]
 
-# if aligned data has already been instantiated, then can just load the aligned data. 
-aligned = align_data(topics=topics, save_aligned=False)
+# if aligned data has already been instantiated, then can just load the aligned data.
+aligned, mission_timesteps = align_data(topics=topics, save_aligned=False)
 #aligned = load_aligned_data("aligned_data.zarr")
 
 output_file = "aligned_dataset_shapes.txt"
@@ -42,6 +44,42 @@ ds_cfg.scale_actions = True
 
 dataset, episode_sums_total = build_offline_dataset(aligned,ds_cfg)
 save_offline_dataset_hdf5(dataset)
+
+# --- NEW: Generate mission metadata sidecar ---
+# Compute cumulative timestep offsets per mission (raw, before obs[:-1] shift)
+# Note: obs[:-1] only removes the very last timestep, so episode boundaries are unaffected
+cumulative = 0
+mission_offsets = OrderedDict()
+for mission_name, n_steps in mission_timesteps.items():
+    mission_offsets[mission_name] = cumulative
+    cumulative += n_steps
+
+# Map episode index -> mission (episode k starts at timestep k*1000 in the flat dataset)
+total_timesteps = cumulative - 1   # after obs[:-1] shift
+n_episodes = (total_timesteps + 999) // 1000
+episode_to_mission = {}
+mission_to_episodes = {m: [] for m in mission_timesteps}
+
+for ep_idx in range(n_episodes):
+    ep_start_ts = ep_idx * 1000
+    for mission_name, offset in mission_offsets.items():
+        mission_end = offset + mission_timesteps[mission_name]
+        if offset <= ep_start_ts < mission_end:
+            episode_to_mission[ep_idx] = mission_name
+            mission_to_episodes[mission_name].append(ep_idx)
+            break
+
+metadata = {
+    "missions": list(mission_timesteps.keys()),
+    "mission_timesteps": dict(mission_timesteps),
+    "episode_to_mission": {str(k): v for k, v in episode_to_mission.items()},
+    "mission_to_episodes": {k: v for k, v in mission_to_episodes.items() if v},
+    "total_episodes": n_episodes,
+    "episode_length": 1000,
+}
+with open("mission_metadata.json", "w") as f:
+    json.dump(metadata, f, indent=2)
+print(f"Saved mission_metadata.json ({len(mission_timesteps)} missions, {n_episodes} episodes)")
 
 # Write dataset info to file and print
 with open(output_file, "a") as f:

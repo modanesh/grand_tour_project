@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import h5py
 import copy
+import json
 from diffusion_policy.common.pytorch_util import dict_apply
 from diffusion_policy.common.replay_buffer import ReplayBuffer
 from diffusion_policy.common.sampler import SequenceSampler, get_val_mask
@@ -10,7 +11,7 @@ from diffusion_policy.model.common.normalizer import LinearNormalizer
 from diffusion_policy.dataset.base_dataset import BaseLowdimDataset
 
 class AnymalDataset(BaseLowdimDataset):
-    def __init__(self, 
+    def __init__(self,
             hdf5_path,
             horizon=1,
             pad_before=0,
@@ -19,7 +20,9 @@ class AnymalDataset(BaseLowdimDataset):
             action_key='action',
             seed=42,
             val_ratio=0.0,
-            max_train_episodes=None
+            max_train_episodes=None,
+            mission_metadata_path=None,
+            train_missions=None
             ):
         super().__init__()
         
@@ -52,13 +55,23 @@ class AnymalDataset(BaseLowdimDataset):
             }
         }
         self.replay_buffer = ReplayBuffer(root=root)
-        
+
         # Setup train/val split
-        val_mask = get_val_mask(
-            n_episodes=self.replay_buffer.n_episodes,
-            val_ratio=val_ratio,
-            seed=seed)
-        train_mask = ~val_mask
+        # NEW: mission-aware masking
+        if mission_metadata_path is not None and train_missions is not None:
+            with open(mission_metadata_path) as f:
+                metadata = json.load(f)
+            ep_to_mission = metadata['episode_to_mission']
+            train_mask = np.array([
+                ep_to_mission.get(str(ep), '') in train_missions
+                for ep in range(self.replay_buffer.n_episodes)
+            ], dtype=bool)
+        else:
+            val_mask = get_val_mask(
+                n_episodes=self.replay_buffer.n_episodes,
+                val_ratio=val_ratio,
+                seed=seed)
+            train_mask = ~val_mask
         
         self.sampler = SequenceSampler(
             replay_buffer=self.replay_buffer,

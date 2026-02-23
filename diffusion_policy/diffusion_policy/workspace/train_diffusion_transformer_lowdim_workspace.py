@@ -123,6 +123,8 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
         wandb.config.update(
             {
                 "output_dir": self.output_dir,
+                "train_missions": list(cfg.task.dataset.get("train_missions", [])),
+                "test_missions": list(cfg.task.env_runner.get("test_missions", [])),
             }
         )
 
@@ -217,34 +219,47 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                 # run rollout
                 if (self.epoch % cfg.training.rollout_every) == 0:
                     with torch.no_grad():
-                        # sample trajectory from training set, and evaluate difference
                         eval_result = env_runner.run(policy)
-                        
+
                         # Handle different return types from env_runner
                         if isinstance(eval_result, dict):
-                            # Custom runner (e.g., AnymalRunner) returns dict with eval results
-                            eval_score = eval_result.get('eval_score', 0.0)
-                            n_eps = eval_result.get('n_episodes', 0)
-                            rew_terms = eval_result.get('reward_terms', {})
-                            ep_len = eval_result.get('episode_length', 0.0)
-                            obs_stats = eval_result.get('obs_stats', {})
-                            
-                            # Log evaluation results
-                            step_log['test_mean_score'] = eval_score
-                            step_log['eval_n_episodes'] = n_eps
-                            step_log['eval_episode_length'] = ep_len
-                            
-                            # Log reward terms
-                            for k, v in rew_terms.items():
-                                step_log[f'eval_reward_terms/{k}'] = v
-                            
-                            # Log observation stats
-                            for k, v in obs_stats.items():
-                                step_log[f'eval_{k}'] = v
-                            
-                            print("---------------------------------------")
-                            print(f"Evaluation over {n_eps} episodes: {eval_score:.3f}")
-                            print("---------------------------------------")
+                            if 'test_ATE' in eval_result:
+                                # Offline eval runner (AnymalOfflineRunner) returns ATE/RTE metrics
+                                step_log['test_ATE'] = eval_result['test_ATE']
+                                step_log['test_RTE'] = eval_result['test_RTE']
+                                step_log['test_mean_score'] = eval_result['test_score']
+                                for mission, ate in eval_result['per_mission_ATE'].items():
+                                    step_log[f'test_ATE/{mission}'] = ate
+                                for mission, rte in eval_result['per_mission_RTE'].items():
+                                    step_log[f'test_RTE/{mission}'] = rte
+
+                                print("---------------------------------------")
+                                print(f"Offline Eval - ATE: {eval_result['test_ATE']:.4f}, RTE: {eval_result['test_RTE']:.4f}")
+                                print("---------------------------------------")
+                            else:
+                                # Custom runner (e.g., AnymalRunner) returns dict with eval results
+                                eval_score = eval_result.get('eval_score', 0.0)
+                                n_eps = eval_result.get('n_episodes', 0)
+                                rew_terms = eval_result.get('reward_terms', {})
+                                ep_len = eval_result.get('episode_length', 0.0)
+                                obs_stats = eval_result.get('obs_stats', {})
+
+                                # Log evaluation results
+                                step_log['test_mean_score'] = eval_score
+                                step_log['eval_n_episodes'] = n_eps
+                                step_log['eval_episode_length'] = ep_len
+
+                                # Log reward terms
+                                for k, v in rew_terms.items():
+                                    step_log[f'eval_reward_terms/{k}'] = v
+
+                                # Log observation stats
+                                for k, v in obs_stats.items():
+                                    step_log[f'eval_{k}'] = v
+
+                                print("---------------------------------------")
+                                print(f"Evaluation over {n_eps} episodes: {eval_score:.3f}")
+                                print("---------------------------------------")
                         else:
                             # Default runner returns filename (zarr path)
                             filename = eval_result

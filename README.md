@@ -197,7 +197,17 @@ Note that for DiffuseLoco, depending on how many observation dimensions there ar
 
 ## Evaluation
 
-All training scripts automatically evaluate in Isaac Gym every `eval_freq` steps and log the individual reward terms and the avg episode reward and length
+All training scripts automatically evaluate offline on Grand Tour test missions every `rollout_every` epochs and log ATE (Average Tracking Error) and RTE (Relative Tracking Error) metrics.
+
+### Mission-aware Train/Test Split
+
+After running `build_dataset_full_pipeline.py`:
+
+1. Inspect `mission_metadata.json` for all missions and episode counts
+2. Select train/test missions and update `train_missions` and `test_missions` in `anymal_diffusion_policy.yaml`
+3. Run `python diffuseloco.py` — training automatically evaluates on test missions
+
+Logged metrics: `test_ATE`, `test_RTE`, `test_ATE/{mission}`, `test_RTE/{mission}`
 
 ---
 
