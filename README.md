@@ -201,10 +201,23 @@ All training scripts automatically evaluate offline on Grand Tour test missions 
 
 ### Mission-aware Train/Test Split
 
-After running `build_dataset_full_pipeline.py`:
+The project uses `anymal_diffusion_policy_mission_split.yaml` with a balanced mission-aware split:
 
-1. Inspect `mission_metadata.json` for all missions and episode counts
-2. Select train/test missions and update `train_missions` and `test_missions` in `anymal_diffusion_policy.yaml`
+**Test missions (6 total):**
+- `spx-2` (2024-11-02-17-18-32)
+- `snow-2` (2024-11-02-21-12-51)
+- `eig-1` (2024-11-03-13-51-43)
+- `con-4` (2024-12-09-11-28-28)
+- `arc-2` (2024-11-18-13-22-14)
+- `arc-7` (2024-11-18-17-31-36)
+
+**Train missions (43 total):** All other missions from `mission_metadata.json`
+
+This split ensures test missions are held out entirely, preventing data leakage.
+
+To use this split:
+1. Run `build_dataset_full_pipeline.py` to generate `mission_metadata.json`
+2. Use `anymal_diffusion_policy_mission_split.yaml` config
 3. Run `python diffuseloco.py` — training automatically evaluates on test missions
 
 Logged metrics: `test_ATE`, `test_RTE`, `test_ATE/{mission}`, `test_RTE/{mission}`
