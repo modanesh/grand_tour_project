@@ -213,6 +213,8 @@ The project uses `anymal_diffusion_policy_mission_split.yaml` with a balanced mi
 
 **Train missions (43 total):** All other missions from `mission_metadata.json`
 
+**TODO**: as of Feb. 23, only testing on spz-2 (single mission) to save test time.
+
 This split ensures test missions are held out entirely, preventing data leakage.
 
 To use this split:
