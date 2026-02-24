@@ -15,7 +15,7 @@ from tqdm import tqdm
 from reward import rewards
 from utils import compute_mean_std, load_hdf5_dataset
 from grandtour_compatibility import unscale_observations
-from isaac_compatibility import make_actions_compatible
+from isaac_compatibility import make_actions_compatible, clip_actions
 
 class OnlineEval:
 
@@ -136,7 +136,21 @@ class OnlineEval:
         #task_name: str = "anymal_c_flat",
         device: str = "cuda",
     ) -> np.ndarray:
-        
+        """
+        Evaluate policy on Isaac Gym environment with proper Grand Tour ↔ Isaac Gym compatibility.
+
+        Domain Adaptation:
+        - Observations: Isaac Gym outputs scaled observations → unscale to Grand Tour format (policy trained on raw data)
+        - Actions: Policy outputs Grand Tour format (absolute positions) → convert to Isaac Gym format (offsets)
+
+        Observation transformation:
+        - Isaac Gym: [lin_vel*2.0, ang_vel*0.25, gravity, commands*[2.0,2.0,0.25], (dof_pos-default)*1.0, dof_vel*0.05, prev_actions_offset]
+        - Grand Tour: [lin_vel, ang_vel, gravity, commands, dof_pos, dof_vel, prev_actions_absolute]
+
+        Action transformation:
+        - Policy outputs: Absolute joint positions (Grand Tour format)
+        - Isaac Gym step: Expects action offsets = (absolute - default) / action_scale
+        """
         actor.eval()
 
         num_repetitions = 1
@@ -145,7 +159,12 @@ class OnlineEval:
         env = self.env
         env_cfg = self.env_cfg
 
-        obs = env.get_observations()
+        obs = env.get_observations()  # Isaac Gym observations (48 dims with prev_actions)
+
+        # Unscale Isaac Gym observations to Grand Tour format (policy was trained on unscaled data)
+        obs = unscale_observations(obs, device=device)
+
+        # Remove prev_actions to match training setup (36 dims)
         if not self.include_prev_actions:
             obs = obs[:, :-12]  # Remove last 12 dimensions (prev_actions)
         
@@ -206,18 +225,24 @@ class OnlineEval:
                 obs_all_list.append(obs.cpu().numpy())
             
             actions = actor.act_inference(obs_normalized.detach())
-            
-            # Convert actions from absolute positions (GrandTour format) to offsets (Isaac Gym format)
-            # Policy outputs absolute positions, but Isaac Gym expects normalized offsets
+
+            # Convert actions from Grand Tour format (absolute positions) to Isaac Gym format (offsets)
+            # Policy outputs absolute joint positions (Grand Tour format)
+            # Isaac Gym expects action offsets from default positions
             actions_np = actions.detach().cpu().numpy()
-            #actions_isaac = make_actions_compatible(actions_np)
-            #actions_isaac = torch.tensor(actions_isaac, device=actions.device, dtype=actions.dtype)
-            
+            actions_isaac = make_actions_compatible(actions_np)
+            actions_isaac = np.clip(actions_isaac, -100.0, 100.0)  # Clip to reasonable range
+            actions_isaac = torch.tensor(actions_isaac, device=actions.device, dtype=actions.dtype)
+
             # Store actions for per-dimension analysis (from policy output, before conversion)
             with torch.no_grad():
                 actions_all_list.append(actions_np)
-            
-            obs, _, rews, dones, infos = env.step(actions.detach())
+
+            obs, _, rews, dones, infos = env.step(actions_isaac)
+
+            # Unscale Isaac Gym observations back to Grand Tour format
+            obs = unscale_observations(obs, device=device)
+
             if not self.include_prev_actions:
                 obs = obs[:, :-12]  # Remove last 12 dimensions (prev_actions)
 
