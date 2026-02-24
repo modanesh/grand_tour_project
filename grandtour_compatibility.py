@@ -55,15 +55,17 @@ def unscale_joint_pos(joint_pos_scaled):
     Unscale joint positions from Isaac Gym format to GrandTour format.
     Isaac Gym: (dof_pos - default_dof_pos) * 1.0
     GrandTour: joint_pos (absolute positions, unscaled)
+
+    Uses Grand Tour defaults to match make_actions_compatible() for consistency.
     """
-    default_dof_pos = build_default_dof_pos()
-    
+    default_dof_pos = build_default_dof_pos(use_grand_tour=True)
+
     if isinstance(joint_pos_scaled, torch.Tensor):
         default_dof_pos_torch = torch.tensor(default_dof_pos, device=joint_pos_scaled.device, dtype=joint_pos_scaled.dtype)
         # Isaac Gym stores: (dof_pos - default_dof_pos) * scale
         # To get absolute: (scaled_offset / scale) + default_dof_pos
         return (joint_pos_scaled / ISAAC_DOF_POS_SCALE) + default_dof_pos_torch
-    
+
     return (joint_pos_scaled / ISAAC_DOF_POS_SCALE) + default_dof_pos
 
 
@@ -81,19 +83,20 @@ def unscale_previous_actions(actions_scaled):
     Convert previous actions from Isaac Gym format (offsets) to GrandTour format (absolute positions).
     Isaac Gym stores actions as normalized offsets: action (offset from default_dof_pos)
     GrandTour stores actions as absolute positions
-    
+
     This is the inverse of make_actions_compatible():
     - make_actions_compatible: absolute -> (absolute - default) / action_scale
     - unscale_previous_actions: offset -> offset * action_scale + default
-    
+
+    Uses Grand Tour defaults to match make_actions_compatible() for consistency.
     """
-    default_dof_pos = build_default_dof_pos()
-    
+    default_dof_pos = build_default_dof_pos(use_grand_tour=True)
+
     if isinstance(actions_scaled, torch.Tensor):
         default_dof_pos_torch = torch.tensor(default_dof_pos, device=actions_scaled.device, dtype=actions_scaled.dtype)
         # Convert offset back to absolute: offset * action_scale + default_dof_pos
         return actions_scaled * action_scale + default_dof_pos_torch
-    
+
     # Convert offset back to absolute: offset * action_scale + default_dof_pos
     return actions_scaled * action_scale + default_dof_pos
 
