@@ -158,7 +158,7 @@ decoder:
 eval:
   task_name: anymal_d_flat
   seed: 27
-  include_prev_actions: true
+  include_prev_actions: false
 
 # Training loop config
 num_cycles: 50
