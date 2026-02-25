@@ -24,6 +24,7 @@ import torch
 torch.set_float32_matmul_precision('medium')
 torch.backends.cuda.matmul.allow_tf32 = True
 
+import wandb
 import hydra
 from omegaconf import OmegaConf
 import pathlib
@@ -154,6 +155,7 @@ class AdapterTrainingWorkspace(BaseWorkspace):
         log.info(f"Batch size: {batch_size}, Dataset size: {dataset_size}")
 
         # Training loop
+        global_step = 0
         for epoch in tqdm(range(self.cfg.decoder.num_epochs), desc="Adapter fine-tuning", position=0):
             epoch_loss = 0.0
             num_batches = 0
@@ -190,7 +192,9 @@ class AdapterTrainingWorkspace(BaseWorkspace):
 
                 epoch_loss += loss.item()
                 num_batches += 1
+                global_step += 1
                 pbar.set_postfix(loss=f"{loss.item():.6f}")
+                wandb.log({'decoder/step_loss': loss.item(), 'decoder/step': global_step, 'cycle': self.cycle})
 
             avg_loss = epoch_loss / num_batches
             scheduler.step()
@@ -199,6 +203,12 @@ class AdapterTrainingWorkspace(BaseWorkspace):
                 f"Epoch {epoch+1}/{self.cfg.decoder.num_epochs} | "
                 f"Loss: {avg_loss:.6f} | LR: {scheduler.get_last_lr()[0]:.6e}"
             )
+            wandb.log({
+                'decoder/loss': avg_loss,
+                'decoder/lr': scheduler.get_last_lr()[0],
+                'decoder/epoch': epoch + 1,
+                'cycle': self.cycle,
+            })
 
         log.info("✓ Output decoder fine-tuning complete")
 

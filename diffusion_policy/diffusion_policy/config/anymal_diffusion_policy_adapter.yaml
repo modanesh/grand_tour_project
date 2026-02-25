@@ -161,5 +161,5 @@ eval:
   include_prev_actions: true
 
 # Training loop config
-num_cycles: 5
+num_cycles: 50
 device: cuda:0
