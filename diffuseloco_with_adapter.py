@@ -166,8 +166,12 @@ class AdapterTrainingWorkspace(BaseWorkspace):
                 batch_expert_actions = expert_actions_norm[batch_indices]
 
                 # Get policy output for Isaac Gym observations
+                # predict_action expects {'obs': (B, n_obs_steps, obs_dim)}
+                # Duplicate single obs across n_obs_steps as approximation
                 with torch.no_grad():
-                    policy_output = self.gt_policy.act_inference(batch_isaac_obs)
+                    obs_seq = batch_isaac_obs.unsqueeze(1).expand(-1, self.gt_policy.n_obs_steps, -1)
+                    result = self.gt_policy.predict_action({'obs': obs_seq})
+                    policy_output = result['action'][:, 0, :]  # take first action step (B, 12)
 
                 # Decoder maps policy output to Isaac Gym actions
                 pred_actions = self.output_decoder(policy_output)
