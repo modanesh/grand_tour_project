@@ -242,6 +242,21 @@ class AdapterTrainingWorkspace(BaseWorkspace):
         log.info(f"  Reward terms: {reward_terms}")
         log.info(f"{'─'*40}\n")
 
+        # Log to wandb
+        wandb_log = {
+            'isaac_eval/avg_reward': eval_score,
+            'isaac_eval/n_episodes': n_episodes,
+            'isaac_eval/avg_episode_length': avg_ep_len,
+            'cycle': self.cycle,
+        }
+        # Individual reward terms
+        for term_name, term_val in reward_terms.items():
+            wandb_log[f'isaac_eval/{term_name}'] = term_val
+        # Observation and action stats
+        for stat_name, stat_val in obs_stats.items():
+            wandb_log[f'isaac_eval/{stat_name}'] = stat_val
+        wandb.log(wandb_log)
+
         # Store in history
         self.eval_history.append({
             'cycle': self.cycle,
