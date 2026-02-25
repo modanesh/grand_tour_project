@@ -160,7 +160,8 @@ class AdapterTrainingWorkspace(BaseWorkspace):
 
             perm = torch.randperm(dataset_size)
 
-            for i in tqdm(range(0, dataset_size, batch_size), desc=f"Fine-tuning epoch {epoch+1}/{self.cfg.decoder.num_epochs}", position=1, leave=False):
+            pbar = tqdm(range(0, dataset_size, batch_size), desc=f"Epoch {epoch+1}/{self.cfg.decoder.num_epochs}", position=1, leave=False)
+            for i in pbar:
                 batch_indices = perm[i : i + batch_size]
                 batch_isaac_obs = expert_obs[batch_indices]
                 batch_expert_actions = expert_actions_norm[batch_indices]
@@ -189,6 +190,7 @@ class AdapterTrainingWorkspace(BaseWorkspace):
 
                 epoch_loss += loss.item()
                 num_batches += 1
+                pbar.set_postfix(loss=f"{loss.item():.6f}")
 
             avg_loss = epoch_loss / num_batches
             scheduler.step()

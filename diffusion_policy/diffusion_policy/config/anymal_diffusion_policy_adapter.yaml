@@ -151,7 +151,7 @@ decoder:
   action_dim: 12         # Isaac Gym expects 12D actions
   expert_data_path: expert_dataset.hdf5
   learning_rate: 0.001
-  num_epochs: 50
+  num_epochs: 1
   batch_size: 64
 
 # Evaluation config
