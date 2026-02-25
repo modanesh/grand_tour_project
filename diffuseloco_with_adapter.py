@@ -262,7 +262,7 @@ class AdapterTrainingWorkspace(BaseWorkspace):
             'config': OmegaConf.to_container(self.cfg),
         }
 
-        path = pathlib.Path(self.output_dir).joinpath('checkpoints', f'{tag}.ckpt')
+        path = pathlib.Path(self.output_dir).joinpath('checkpoints', f'adapter_{tag}.ckpt')
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(checkpoint, path)
 
