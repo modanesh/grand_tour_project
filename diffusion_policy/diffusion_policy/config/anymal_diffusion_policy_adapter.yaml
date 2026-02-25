@@ -152,7 +152,7 @@ decoder:
   expert_data_path: expert_dataset.hdf5
   learning_rate: 0.001
   num_epochs: 1
-  batch_size: 64
+  batch_size: 2048
 
 # Evaluation config
 eval:
