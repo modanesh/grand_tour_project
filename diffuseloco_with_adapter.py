@@ -256,10 +256,12 @@ class AdapterTrainingWorkspace(BaseWorkspace):
 
             try:
                 # Phase 1: Train GT policy
+                log.info("[PHASE 1] Training policy on Grand Tour data...")
                 gt_workspace = self._create_gt_workspace()
                 self.gt_policy = self._train_gt_policy(gt_workspace)
 
                 # Phase 2: Create/fine-tune decoder
+                log.info("[PHASE 2] Fine-tuning output decoder on Isaac Gym expert data...")
                 policy_output_dim = self.cfg.decoder.policy_output_dim
                 action_dim = self.cfg.decoder.action_dim
 
@@ -269,6 +271,7 @@ class AdapterTrainingWorkspace(BaseWorkspace):
                 self._finetune_decoder()
 
                 # Phase 3: Evaluate in Isaac Gym
+                log.info("[PHASE 3] Evaluating adapted policy in Isaac Gym (anymal_d_flat)...")
                 eval_score = self._evaluate_isaac()
 
                 # Save checkpoint
