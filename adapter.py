@@ -70,9 +70,11 @@ class AdaptedPolicy(nn.Module):
         """
         isaac_obs = isaac_obs_dict['obs']  # (B, obs_dim)
 
-        # Get policy output
+        # Get policy output via predict_action — expects (B, n_obs_steps, obs_dim)
         with torch.no_grad():
-            policy_output = self.policy.act_inference(isaac_obs)
+            obs_seq = isaac_obs.unsqueeze(1).expand(-1, self.policy.n_obs_steps, -1)
+            result = self.policy.predict_action({'obs': obs_seq})
+            policy_output = result['action'][:, 0, :]  # (B, 12)
 
         # Decoder maps policy output to Isaac Gym actions
         isaac_actions = self.output_decoder(policy_output)
@@ -91,9 +93,11 @@ class AdaptedPolicy(nn.Module):
         Returns:
             isaac_actions: (B, action_dim) Isaac Gym action predictions
         """
-        # Get policy output
+        # Get policy output via predict_action — expects (B, n_obs_steps, obs_dim)
         with torch.no_grad():
-            policy_output = self.policy.act_inference(isaac_obs)
+            obs_seq = isaac_obs.unsqueeze(1).expand(-1, self.policy.n_obs_steps, -1)
+            result = self.policy.predict_action({'obs': obs_seq})
+            policy_output = result['action'][:, 0, :]  # (B, 12)
 
         # Decoder maps policy output to Isaac Gym actions
         isaac_actions = self.output_decoder(policy_output)
