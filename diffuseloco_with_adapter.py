@@ -89,14 +89,16 @@ class AdapterTrainingWorkspace(BaseWorkspace):
         elapsed = time.time() - start_time
         log.info(f"gt_workspace.run() completed in {elapsed:.2f}s")
 
-        # Get trained policy
+        # Get trained policy — workspace uses self.ema_model (if EMA enabled) or self.model
         log.info("Retrieving trained policy...")
-        if hasattr(gt_workspace, 'policy'):
-            self.gt_policy = gt_workspace.policy
-            self.gt_policy.eval()
-            log.info(f"✓ GT policy retrieved: {type(self.gt_policy)}")
+        if hasattr(gt_workspace, 'ema_model') and gt_workspace.ema_model is not None:
+            self.gt_policy = gt_workspace.ema_model
+        elif hasattr(gt_workspace, 'model') and gt_workspace.model is not None:
+            self.gt_policy = gt_workspace.model
         else:
-            raise ValueError("GT workspace doesn't have 'policy' attribute")
+            raise ValueError("GT workspace has neither 'ema_model' nor 'model' attribute")
+        self.gt_policy.eval()
+        log.info(f"✓ GT policy retrieved: {type(self.gt_policy)}")
 
         log.info("✓ GT policy training complete")
         return self.gt_policy
