@@ -217,7 +217,7 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                 policy.eval()
 
                 # run rollout
-                if (self.epoch % cfg.training.rollout_every) == 0:
+                if cfg.training.rollout_every is not None and (self.epoch % cfg.training.rollout_every) == 0:
                     with torch.no_grad():
                         eval_result = env_runner.run(policy)
 
