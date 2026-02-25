@@ -131,7 +131,7 @@ gt_workspace:
     max_val_steps: null
     num_epochs: 100  # Fewer epochs per cycle for adapter training
     resume: true
-    rollout_every: 10
+    rollout_every: null  # Disable Isaac Gym rollouts during Phase 1 — eval happens in Phase 3
     sample_every: 10
     seed: 42
     tqdm_interval_sec: 1.0
