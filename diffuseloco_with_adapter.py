@@ -146,7 +146,7 @@ class AdapterTrainingWorkspace(BaseWorkspace):
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=self.cfg.decoder.num_epochs
         )
-        criterion = nn.MSELoss()
+        criterion = nn.HuberLoss(delta=1.0)
 
         dataset_size = len(expert_obs)
         batch_size = self.cfg.decoder.batch_size

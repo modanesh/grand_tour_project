@@ -107,12 +107,15 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                 cfg.ema,
                 model=self.ema_model)
 
-        # configure env runner
+        # configure env runner — skip instantiation if rollouts are disabled
         env_runner: BaseLowdimRunner
-        env_runner = hydra.utils.instantiate(
-            cfg.task.env_runner,
-            output_dir=self.output_dir)
-        assert isinstance(env_runner, BaseLowdimRunner)
+        if cfg.training.rollout_every is not None:
+            env_runner = hydra.utils.instantiate(
+                cfg.task.env_runner,
+                output_dir=self.output_dir)
+            assert isinstance(env_runner, BaseLowdimRunner)
+        else:
+            env_runner = None
 
         # configure logging
         wandb_run = wandb.init(
@@ -124,7 +127,7 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
             {
                 "output_dir": self.output_dir,
                 "train_missions": list(cfg.task.dataset.get("train_missions", [])),
-                "test_missions": list(cfg.task.env_runner.get("test_missions", [])),
+                "test_missions": list(cfg.task.env_runner.get("test_missions", [])) if cfg.training.rollout_every is not None else [],
             }
         )
 
