@@ -78,15 +78,23 @@ class AdapterTrainingWorkspace(BaseWorkspace):
     def _train_gt_policy(self, gt_workspace, num_steps: int = None):
         """Train/update policy on Grand Tour data."""
         log.info(f"Starting GT policy training (Cycle {self.cycle})...")
+        import time
+        start_time = time.time()
 
         # Run the GT training workspace
         # This uses the standard diffuseloco training procedure
+        log.info("About to call gt_workspace.run()...")
+        sys.stdout.flush()
         gt_workspace.run()
+        elapsed = time.time() - start_time
+        log.info(f"gt_workspace.run() completed in {elapsed:.2f}s")
 
         # Get trained policy
+        log.info("Retrieving trained policy...")
         if hasattr(gt_workspace, 'policy'):
             self.gt_policy = gt_workspace.policy
             self.gt_policy.eval()
+            log.info(f"✓ GT policy retrieved: {type(self.gt_policy)}")
         else:
             raise ValueError("GT workspace doesn't have 'policy' attribute")
 
@@ -109,9 +117,11 @@ class AdapterTrainingWorkspace(BaseWorkspace):
         log.info("=" * 60)
         log.info(f"[Cycle {self.cycle}] PHASE 2: Fine-tuning Output Decoder on Expert Isaac Gym Data")
         log.info("=" * 60)
+        sys.stdout.flush()
 
         expert_data_path = self.cfg.decoder.expert_data_path
         log.info(f"Loading expert data from: {expert_data_path}")
+        sys.stdout.flush()
 
         dataset = load_hdf5_dataset(expert_data_path)
         expert_obs = torch.tensor(dataset['observations'], dtype=torch.float32, device=self.cfg.device)
@@ -256,12 +266,29 @@ class AdapterTrainingWorkspace(BaseWorkspace):
 
             try:
                 # Phase 1: Train GT policy
+                import time
+                phase1_start = time.time()
+                log.info("=" * 60)
                 log.info("[PHASE 1] Training policy on Grand Tour data...")
+                log.info(f"Timestamp: {datetime.now().isoformat()}")
+                log.info("=" * 60)
+                sys.stdout.flush()
+
                 gt_workspace = self._create_gt_workspace()
                 self.gt_policy = self._train_gt_policy(gt_workspace)
 
+                phase1_elapsed = time.time() - phase1_start
+                log.info(f"PHASE 1 completed in {phase1_elapsed:.2f}s")
+                sys.stdout.flush()
+
                 # Phase 2: Create/fine-tune decoder
+                phase2_start = time.time()
+                log.info("=" * 60)
                 log.info("[PHASE 2] Fine-tuning output decoder on Isaac Gym expert data...")
+                log.info(f"Timestamp: {datetime.now().isoformat()}")
+                log.info("=" * 60)
+                sys.stdout.flush()
+
                 policy_output_dim = self.cfg.decoder.policy_output_dim
                 action_dim = self.cfg.decoder.action_dim
 
@@ -270,9 +297,23 @@ class AdapterTrainingWorkspace(BaseWorkspace):
 
                 self._finetune_decoder()
 
+                phase2_elapsed = time.time() - phase2_start
+                log.info(f"PHASE 2 completed in {phase2_elapsed:.2f}s")
+                sys.stdout.flush()
+
                 # Phase 3: Evaluate in Isaac Gym
+                phase3_start = time.time()
+                log.info("=" * 60)
                 log.info("[PHASE 3] Evaluating adapted policy in Isaac Gym (anymal_d_flat)...")
+                log.info(f"Timestamp: {datetime.now().isoformat()}")
+                log.info("=" * 60)
+                sys.stdout.flush()
+
                 eval_score = self._evaluate_isaac()
+
+                phase3_elapsed = time.time() - phase3_start
+                log.info(f"PHASE 3 completed in {phase3_elapsed:.2f}s")
+                sys.stdout.flush()
 
                 # Save checkpoint
                 self._save_checkpoint(tag=f'cycle_{self.cycle}')
