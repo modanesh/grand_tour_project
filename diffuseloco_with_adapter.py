@@ -296,7 +296,7 @@ class AdapterTrainingWorkspace(BaseWorkspace):
             "diffusion_policy", "diffusion_policy", "config"
         )
     ),
-    config_name="anymal_diffusion_policy.yaml",
+    config_name="anymal_diffusion_policy_adapter.yaml",
 )
 def main(cfg: OmegaConf):
     OmegaConf.resolve(cfg)
