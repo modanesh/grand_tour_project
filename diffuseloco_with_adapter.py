@@ -297,6 +297,9 @@ class AdapterTrainingWorkspace(BaseWorkspace):
 def main(cfg: OmegaConf):
     OmegaConf.resolve(cfg)
 
+    # Disable struct mode to allow adding new keys
+    OmegaConf.set_struct(cfg, False)
+
     # Merge in decoder-specific config
     if 'decoder' not in cfg:
         cfg.decoder = OmegaConf.create({
