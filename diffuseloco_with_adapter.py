@@ -29,6 +29,7 @@ from omegaconf import OmegaConf
 import pathlib
 import logging
 from datetime import datetime
+from tqdm import tqdm
 
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 from adapter import OutputDecoder, AdaptedPolicy
@@ -141,13 +142,13 @@ class AdapterTrainingWorkspace(BaseWorkspace):
         log.info(f"Batch size: {batch_size}, Dataset size: {dataset_size}")
 
         # Training loop
-        for epoch in range(self.cfg.decoder.num_epochs):
+        for epoch in tqdm(range(self.cfg.decoder.num_epochs), desc="Adapter fine-tuning", position=0):
             epoch_loss = 0.0
             num_batches = 0
 
             perm = torch.randperm(dataset_size)
 
-            for i in range(0, dataset_size, batch_size):
+            for i in tqdm(range(0, dataset_size, batch_size), desc=f"Fine-tuning epoch {epoch+1}/{self.cfg.decoder.num_epochs}", position=1, leave=False):
                 batch_indices = perm[i : i + batch_size]
                 batch_isaac_obs = expert_obs[batch_indices]
                 batch_expert_actions = expert_actions_norm[batch_indices]
@@ -248,7 +249,7 @@ class AdapterTrainingWorkspace(BaseWorkspace):
 
         num_cycles = self.cfg.num_cycles
 
-        for self.cycle in range(num_cycles):
+        for self.cycle in tqdm(range(num_cycles), desc="Training cycles", position=0):
             log.info(f"\n{'#'*60}")
             log.info(f"## CYCLE {self.cycle + 1}/{num_cycles}")
             log.info(f"{'#'*60}\n")
