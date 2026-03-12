@@ -12,7 +12,6 @@ import torch
 
 from tqdm import tqdm
 import wandb
-from omegaconf import OmegaConf
 
 from reward import rewards
 from utils import compute_mean_std, load_hdf5_dataset
@@ -84,12 +83,21 @@ class OnlineEval:
             self.state_mean, self.state_std = compute_mean_std(dataset["observations"], eps=1e-3)
 
         # Log Isaac Gym environment config to existing wandb run
-        env_cfg_dict = OmegaConf.to_container(env_cfg, resolve=True)
+        def cfg_to_dict(cfg):
+            """Recursively convert legged_gym config object to a serializable dict."""
+            result = {}
+            for key, val in vars(cfg).items():
+                if hasattr(val, '__dict__'):
+                    result[key] = cfg_to_dict(val)
+                elif isinstance(val, (int, float, str, bool, list, tuple, type(None))):
+                    result[key] = val
+            return result
+
         wandb.config.update({
             "isaac_gym_task": task_name,
             "isaac_gym_seed": seed,
             "isaac_gym_normalize": normalize,
-            "isaac_gym_env_config": env_cfg_dict,
+            "isaac_gym_env_config": cfg_to_dict(env_cfg),
         }, allow_val_change=True)
 
 
