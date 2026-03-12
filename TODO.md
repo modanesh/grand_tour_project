@@ -1,64 +1,64 @@
 # TODO / Open Concerns
 
-## Grand Tour Default Joint Angles (`isaac_compatibility.py`)
+## Status Table
 
-### KFE defaults unverified
-`gt_default_joint_angles` assumes KFE joints are the same as Isaac Gym defaults:
-```
-LF_KFE: -0.8,  LH_KFE: 0.8,  RF_KFE: -0.8,  RH_KFE: 0.8
-```
-These were not derived from the Grand Tour dataset — they were assumed. Run
-`compare_dataset_stats.py` on `offline_dataset_pp.hdf5` to verify the actual
-mean joint positions at neutral stance, and update if needed.
+| Issue | Status | Priority |
+|---|---|---|
+| Shape mismatch (48→36D slice in `anymal_dataset.py`) | **Fixed** | — |
+| Double normalization removed (`eval_isaac_v2.py`) | **Fixed** | — |
+| `unscale_observations()` called before slicing (Fix E) | **Fixed** | — |
+| Wandb config logged once per run | **Fixed** | — |
+| Skip first rollout at epoch=0 | **Fixed** | — |
+| `default_joint_angles` IG dict wrong for RF/LH joints (HFE+KFE) | **Fixed** | P0 |
+| Initial pose distribution shift (IG default ≠ GT default) | **Fixed** | P1 |
+| `gt_default_joint_angles` sign + magnitude in `offline_dataset.hdf5` | **Uncertain — unverified** | P2 |
+| KFE defaults in GT (assumed same as IG ±0.8) | **Uncertain — unverified** | P2 |
+| `offline_dataset_pp.hdf5` exact preprocessing | **Unknown** | P3 |
+| Physics/contact sim-to-sim gap | **Unresolved** | P3 |
 
-### HFE defaults assumed from memory
-The GT HFE values (`LF/RF_HFE: 0.84`, `LH/RH_HFE: -0.59`) came from prior
-notes, not from fresh dataset analysis. These are stored in `gt_default_joint_angles`
-in `isaac_compatibility.py` but are currently unused since we switched to
-`offline_dataset.hdf5` (raw format) which stores true absolute positions.
+---
 
-### offline_dataset_pp.hdf5 format unknown
-The post-processed dataset format is unknown — no preprocessing script was found.
-If `offline_dataset_pp.hdf5` is ever used again, the observation format must be
-confirmed before deciding whether to apply `unscale_observations()`.
+## P2 — GT Default Joint Angles (`isaac_compatibility.py`)
 
-## Fundamental Distribution Shift (Isaac Gym vs Grand Tour)
-
-Isaac Gym initialises the robot at its own defaults (LF_HFE=0.4), not Grand
-Tour defaults (LF_HFE=0.84). `make_actions_compatible` and
-`unscale_previous_actions` must use IG defaults because Isaac Gym internally
-applies `target = ig_default + action * action_scale`. Using GT defaults here
-shifts every commanded position by `ig_default - gt_default` (~0.44 rad for
-HFE), causing the robot to collapse immediately (reward=0).
-
-`unscale_joint_pos` uses GT defaults as a pragmatic hack to shift dof_pos
-observations into the GT reference frame (so they look like training data).
-The correct long-term fix would be to set Isaac Gym's `default_dof_pos` in the
-env config to match Grand Tour defaults, making the action and observation
-reference frames consistent without any hacks.
-
-## `normalize` Parameter is Now Dead Code (`eval_isaac_v2.py`)
-
-The `normalize` flag in `OnlineEval.__init__` still loads dataset stats
-(`state_mean`, `state_std`) but the normalization block in `eval_actor_isaac`
-was removed (Fix B). Either:
-- Remove the `normalize` parameter and the dataset loading entirely, or
-- Decide if external normalization is ever needed and re-add intentionally.
-
-## Wandb Config Logged Every Rollout (`eval_isaac_v2.py`)
-
-`wandb.config.update(self._wandb_cfg)` is called at the start of every
-`eval_actor_isaac` call (every `rollout_every` epochs). It's harmless but
-wasteful. Add a `self._wandb_cfg_logged` flag to log only once:
+### Sign convention assumed from URDF (not verified against raw dataset)
+`gt_default_joint_angles` now uses the ANYmal URDF mirrored convention
+(left legs: positive HFE/KFE, right legs: negative) inferred from the live
+Isaac Gym `env.default_dof_pos` inspection. This has not been verified
+against `offline_dataset.hdf5` directly. To confirm, check the mean joint
+positions of the raw dataset:
 ```python
-if wandb.run is not None and not self._wandb_cfg_logged:
-    wandb.config.update(self._wandb_cfg, allow_val_change=True)
-    self._wandb_cfg_logged = True
+import h5py, numpy as np
+with h5py.File("offline_dataset.hdf5") as f:
+    print(np.mean(f["observations"][:, 12:24], axis=0))  # joint pos dims
 ```
+Expected (if convention is correct): LF_HFE≈+0.84, RF_HFE≈-0.84,
+LH_HFE≈+0.59, RH_HFE≈-0.59.
 
-## Single-Instance Obs Table Off-By-One (`eval_isaac_v2.py`)
+### KFE defaults unverified for GT
+`gt_default_joint_angles` assumes KFE magnitudes are the same as Isaac Gym
+(±0.8 rad). These have not been derived from the Grand Tour dataset. The same
+raw mean check above will reveal the actual GT KFE defaults.
 
+---
+
+## P3 — `offline_dataset_pp.hdf5` Format Unknown
+The post-processed dataset format is unknown — no preprocessing script was
+found. If `offline_dataset_pp.hdf5` is ever used again, the observation format
+must be confirmed before deciding whether to apply `unscale_observations()`.
+From `compare_dataset_stats.py`, joint position means are ~0, consistent with
+centering around GT defaults, but other transforms may also be applied.
+
+---
+
+## Minor / Housekeeping
+
+### `normalize` Parameter is Dead Code (`eval_isaac_v2.py`)
+The `normalize` flag still loads dataset stats (`state_mean`, `state_std`) but
+the normalization block was removed (Fix B). Either remove the parameter and
+dataset loading entirely, or re-add intentionally.
+
+### Single-Instance Obs Table Off-By-One (`eval_isaac_v2.py`)
 `obs_isaacgym_format_scaled` is captured after `env.step()`, so it is one step
-behind `obs_gt_format_unscaled`. The very first Isaac Gym obs (from
+behind `obs_gt_format_unscaled`. The first Isaac Gym obs (from
 `env.get_observations()` before the loop) is not captured in Isaac Gym format.
 Minor, but worth being aware of when comparing the two tables side by side.

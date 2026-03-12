@@ -57,7 +57,7 @@ def unscale_joint_pos(joint_pos_scaled):
     GrandTour (offline_dataset.hdf5): raw absolute joint positions
     Uses IG defaults to recover true absolute position: (scaled + ig_default) = actual_pos
     """
-    default_dof_pos = build_default_dof_pos(use_grand_tour=False)  # IG defaults: recovers true absolute position
+    default_dof_pos = build_default_dof_pos(use_grand_tour=True)  # GT defaults: IG env uses GT defaults (P1), so obs = (dof_pos - gt_default)
 
     if isinstance(joint_pos_scaled, torch.Tensor):
         default_dof_pos_torch = torch.tensor(default_dof_pos, device=joint_pos_scaled.device, dtype=joint_pos_scaled.dtype)
@@ -85,7 +85,7 @@ def unscale_previous_actions(actions_scaled):
     - make_actions_compatible: absolute -> (absolute - ig_default) / action_scale
     - unscale_previous_actions: offset -> offset * action_scale + ig_default
     """
-    default_dof_pos = build_default_dof_pos(use_grand_tour=False)  # must match make_actions_compatible
+    default_dof_pos = build_default_dof_pos(use_grand_tour=True)  # must match make_actions_compatible
 
     if isinstance(actions_scaled, torch.Tensor):
         default_dof_pos_torch = torch.tensor(default_dof_pos, device=actions_scaled.device, dtype=actions_scaled.dtype)

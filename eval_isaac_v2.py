@@ -74,6 +74,12 @@ class OnlineEval:
             env_cfg.domain_rand.ground_friction_range = args.domain_rand_ground_friction_range
 
 
+        # Match Isaac Gym initial pose and default_dof_pos to Grand Tour defaults.
+        # Eliminates distribution shift at reset; ensures obs/action unscaling uses
+        # the same reference frame as training data.
+        # Isaac Gym applies: target = default_dof_pos + action * action_scale
+        env_cfg.init_state.default_joint_angles = gt_default_joint_angles
+
         # prepare environment
         #env_cfg.env.num_envs = 1# FOR TESTING
         env, _ = task_registry.make_env(name=args.task, args=args, env_cfg=env_cfg)

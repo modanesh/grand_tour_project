@@ -2,38 +2,42 @@ import numpy as np
 
 """ To make the GrandTour dataset data compatible with Isaac Gym """
 
+# ANYmal URDF convention: left legs (LF, LH) have positive HFE/KFE flexion,
+# right legs (RF, RH) have negative HFE/KFE flexion (mirrored joint axes).
+# Confirmed by live Isaac Gym env.default_dof_pos inspection.
+
 default_joint_angles = { # = target angles [rad] when action = 0.0 (Isaac Gym defaults)
     "LF_HAA": 0.0,
-    "LH_HAA": 0.0,
     "RF_HAA": -0.0,
+    "LH_HAA": 0.0,
     "RH_HAA": -0.0,
 
-    "LF_HFE": 0.4,
-    "LH_HFE": -0.4,
-    "RF_HFE": 0.4,
-    "RH_HFE": -0.4,
+    "LF_HFE": 0.4,   # left: positive
+    "RF_HFE": -0.4,  # right: negative (mirrored) — confirmed by env.default_dof_pos
+    "LH_HFE": 0.4,   # left: positive
+    "RH_HFE": -0.4,  # right: negative
 
-    "LF_KFE": -0.8,
-    "LH_KFE": 0.8,
-    "RF_KFE": -0.8,
-    "RH_KFE": 0.8,
+    "LF_KFE": -0.8,  # left: negative
+    "RF_KFE": 0.8,   # right: positive (mirrored) — confirmed by env.default_dof_pos
+    "LH_KFE": -0.8,  # left: negative
+    "RH_KFE": 0.8,   # right: positive
 }
 
 gt_default_joint_angles = { # = target angles [rad] at neutral stance in Grand Tour dataset
     "LF_HAA": 0.0,
-    "LH_HAA": 0.0,
     "RF_HAA": -0.0,
+    "LH_HAA": 0.0,
     "RH_HAA": -0.0,
 
-    "LF_HFE": 0.84,
-    "LH_HFE": -0.59,
-    "RF_HFE": 0.84,
-    "RH_HFE": -0.59,
+    "LF_HFE": 0.84,   # left: positive
+    "RF_HFE": -0.84,  # right: negative (same URDF convention as IG)
+    "LH_HFE": 0.59,   # left: positive (hind legs less flexed than front)
+    "RH_HFE": -0.59,  # right: negative
 
-    "LF_KFE": -0.8,
-    "LH_KFE": 0.8,
-    "RF_KFE": -0.8,
-    "RH_KFE": 0.8,
+    "LF_KFE": -0.8,   # same magnitude as IG (unverified for GT — see TODO)
+    "RF_KFE": 0.8,    # right: positive (mirrored)
+    "LH_KFE": -0.8,   # left: negative
+    "RH_KFE": 0.8,    # right: positive
 }
 
 NUM_DOF = 12
@@ -97,7 +101,9 @@ def scale_commands(commands_xy_yaw):
     return commands_xy_yaw * COMMANDS_SCALE
 
 def make_actions_compatible(absolute_positions):
-    default_dof_pos = build_default_dof_pos(use_grand_tour=False)  # must use IG defaults: Isaac Gym applies target = ig_default + action * action_scale
+    # Isaac Gym applies: target = default_dof_pos + action * action_scale
+    # IG env is initialised with GT defaults (eval_isaac_v2.py), so subtract GT defaults here.
+    default_dof_pos = build_default_dof_pos(use_grand_tour=True)
     return (absolute_positions - default_dof_pos) / action_scale
 
 def scale_lin_vel(lin_vel):
