@@ -2,7 +2,7 @@ import numpy as np
 
 """ To make the GrandTour dataset data compatible with Isaac Gym """
 
-default_joint_angles = { # = target angles [rad] when action = 0.0
+default_joint_angles = { # = target angles [rad] when action = 0.0 (Isaac Gym defaults)
     "LF_HAA": 0.0,
     "LH_HAA": 0.0,
     "RF_HAA": -0.0,
@@ -12,6 +12,23 @@ default_joint_angles = { # = target angles [rad] when action = 0.0
     "LH_HFE": -0.4,
     "RF_HFE": 0.4,
     "RH_HFE": -0.4,
+
+    "LF_KFE": -0.8,
+    "LH_KFE": 0.8,
+    "RF_KFE": -0.8,
+    "RH_KFE": 0.8,
+}
+
+gt_default_joint_angles = { # = target angles [rad] at neutral stance in Grand Tour dataset
+    "LF_HAA": 0.0,
+    "LH_HAA": 0.0,
+    "RF_HAA": -0.0,
+    "RH_HAA": -0.0,
+
+    "LF_HFE": 0.84,
+    "LH_HFE": -0.59,
+    "RF_HFE": 0.84,
+    "RH_HFE": -0.59,
 
     "LF_KFE": -0.8,
     "LH_KFE": 0.8,
@@ -65,12 +82,12 @@ NOISE_SCALES = {
     'dof_vel': 1.5,
 }
 
-def build_default_dof_pos() -> np.ndarray:
+def build_default_dof_pos(use_grand_tour=False) -> np.ndarray:
+    angles = gt_default_joint_angles if use_grand_tour else default_joint_angles
     default_dof_pos = np.zeros(NUM_DOF, dtype=np.float32)
     for i in range(len(DOF_NAMES)):
-        name = DOF_NAMES[i]  # Gets name in URDF order
-        angle = default_joint_angles[name]  # Dictionary lookup by name
-        default_dof_pos[i] = angle
+        name = DOF_NAMES[i]
+        default_dof_pos[i] = angles[name]
     return default_dof_pos
 
 def scale_joint_vel(joint_vel):
@@ -80,7 +97,7 @@ def scale_commands(commands_xy_yaw):
     return commands_xy_yaw * COMMANDS_SCALE
 
 def make_actions_compatible(absolute_positions):
-    default_dof_pos = build_default_dof_pos()
+    default_dof_pos = build_default_dof_pos(use_grand_tour=True)
     return (absolute_positions - default_dof_pos) / action_scale
 
 def scale_lin_vel(lin_vel):

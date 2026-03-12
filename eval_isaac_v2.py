@@ -11,6 +11,8 @@ import numpy as np
 import torch
 
 from tqdm import tqdm
+import wandb
+from omegaconf import OmegaConf
 
 from reward import rewards
 from utils import compute_mean_std, load_hdf5_dataset
@@ -81,7 +83,16 @@ class OnlineEval:
             dataset = load_hdf5_dataset(dataset_path)
             self.state_mean, self.state_std = compute_mean_std(dataset["observations"], eps=1e-3)
 
-    
+        # Log Isaac Gym environment config to existing wandb run
+        env_cfg_dict = OmegaConf.to_container(env_cfg, resolve=True)
+        wandb.config.update({
+            "isaac_gym_task": task_name,
+            "isaac_gym_seed": seed,
+            "isaac_gym_normalize": normalize,
+            "isaac_gym_env_config": env_cfg_dict,
+        }, allow_val_change=True)
+
+
     def calculate_total_reward(self, rewbuffer, ep_infos, lenbuffer):
         """
         Calculate mean reward from episode total rewards buffer and individual reward terms.
@@ -143,9 +154,8 @@ class OnlineEval:
         env_cfg = self.env_cfg
 
         obs = env.get_observations()
-        obs = obs[:, :-12]  # Remove last 12 dimensions (prev_actions)
-        
-        print("removed last 12 observations")
+        obs = unscale_observations(obs, device=str(obs.device))
+        obs = obs[:, :-12]  # Remove last 12 dimensions (prev_actions), policy trained on 36D obs
 
         logger = Logger(env.dt) # note env.dt = 0.0199999 
         robot_index = 0  # which robot is used for logging
@@ -161,11 +171,6 @@ class OnlineEval:
         max_episode_length = int(env.max_episode_length)
 
         episode_lengths = torch.zeros(num_envs, dtype=torch.long, device=env.device)
-
-        # Convert normalization stats to torch tensors on the correct device
-        if self.normalize:
-            state_mean_torch = torch.tensor(self.state_mean, dtype=torch.float32, device=device)
-            state_std_torch = torch.tensor(self.state_std, dtype=torch.float32, device=device)
 
         # Track cumulative rewards per environment (matching OnPolicyRunner approach)
         cur_reward_sum = torch.zeros(num_envs, dtype=torch.float, device=device)
@@ -184,14 +189,7 @@ class OnlineEval:
         for i in range(num_repetitions * int(max_episode_length)+2):
         #for i in tqdm(range(num_repetitions * int(max_episode_length)+2),desc="Online IG Eval"):
 
-            # TODO: commented by Laurence (2026-FEB-21)
-            # obs = unscale_observations(obs, device=device)
-
-            # Normalize observations before feeding to actor
-            if self.normalize:
-                obs_normalized = (obs - state_mean_torch) / state_std_torch
-            else:
-                obs_normalized = obs
+            obs_normalized = obs  # already unscaled and sliced to 36D
             
             # Collect observation stats (from raw Isaac Gym observations)
             with torch.no_grad():
@@ -207,18 +205,17 @@ class OnlineEval:
             actions = actor.act_inference(obs_normalized.detach())
             
             # Convert actions from absolute positions (GrandTour format) to offsets (Isaac Gym format)
-            # Policy outputs absolute positions, but Isaac Gym expects normalized offsets
             actions_np = actions.detach().cpu().numpy()
-            #actions_isaac = make_actions_compatible(actions_np)
-            actions_isaac = actions_np
+            actions_isaac = make_actions_compatible(actions_np)
             actions_isaac = torch.tensor(actions_isaac, device=actions.device, dtype=actions.dtype)
-            
-            # Store actions for per-dimension analysis (from policy output, before conversion)
+
+            # Store actions for per-dimension analysis (policy output, before conversion)
             with torch.no_grad():
                 actions_all_list.append(actions_np)
-            
+
             obs, _, rews, dones, infos = env.step(actions_isaac.detach())
-            obs = obs[:, :-12]  # Remove last 12 dimensions (prev_actions)
+            obs = unscale_observations(obs, device=str(obs.device))
+            obs = obs[:, :-12]  # Remove prev_actions, policy trained on 36D obs
 
             # Accumulate rewards per environment (matching OnPolicyRunner approach)
             cur_reward_sum += rews.squeeze()
@@ -240,7 +237,7 @@ class OnlineEval:
             if i < stop_state_log:
                 logger.log_states(
                     {
-                        'dof_pos_target': actions[robot_index, joint_index].item() * env.cfg.control.action_scale,
+                        'dof_pos_target': actions[robot_index, joint_index].item(),  # absolute position (GT format)
                         'dof_pos': env.dof_pos[robot_index, joint_index].item(),
                         'dof_vel': env.dof_vel[robot_index, joint_index].item(),
                         'dof_torque': env.torques[robot_index, joint_index].item(),
