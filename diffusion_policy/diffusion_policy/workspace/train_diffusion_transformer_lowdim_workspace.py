@@ -215,7 +215,8 @@ class TrainDiffusionTransformerLowdimWorkspace(BaseWorkspace):
                 policy.eval()
 
                 # run rollout
-                if (self.epoch % cfg.training.rollout_every) == 0:
+                skip_first = cfg.training.get('skip_first_rollout', False)
+                if (self.epoch % cfg.training.rollout_every) == 0 and not (skip_first and self.epoch == 0):
                     with torch.no_grad():
                         # sample trajectory from training set, and evaluate difference
                         eval_result = env_runner.run(policy)

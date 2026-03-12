@@ -130,6 +130,7 @@ training:
   num_epochs: 1000
   resume: true
   rollout_every: 10  # Run online eval every 10 epochs
+  skip_first_rollout: true  # Skip eval at epoch=0 (saves time on startup)
   sample_every: 10
   seed: 42
   tqdm_interval_sec: 1.0
