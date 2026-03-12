@@ -1,5 +1,7 @@
 import argparse
 import sys
+import json
+import tempfile
 
 from legged_gym import LEGGED_GYM_ROOT_DIR
 import os
@@ -16,7 +18,20 @@ import wandb
 from reward import rewards
 from utils import compute_mean_std, load_hdf5_dataset
 from grandtour_compatibility import unscale_observations
-from isaac_compatibility import make_actions_compatible
+from isaac_compatibility import (
+    make_actions_compatible,
+    gt_default_joint_angles,
+    default_joint_angles,
+    DOF_NAMES,
+    action_scale,
+    obs_scale,
+    LIN_VEL_SCALE,
+    ANG_VEL_SCALE,
+    DOF_VEL_SCALE,
+    COMMANDS_SCALE,
+    CLIP_OBSERVATIONS,
+    CLIP_ACTIONS,
+)
 
 class OnlineEval:
 
@@ -82,23 +97,41 @@ class OnlineEval:
             dataset = load_hdf5_dataset(dataset_path)
             self.state_mean, self.state_std = compute_mean_std(dataset["observations"], eps=1e-3)
 
-        # Store env config for wandb logging later (wandb may not be initialized yet at __init__ time)
+        # Store env config for JSON artifact logging later (wandb may not be initialized yet at __init__ time)
         def cfg_to_dict(cfg):
-            """Recursively convert legged_gym config object to a serializable dict."""
+            """Recursively convert legged_gym config object to a JSON-serializable dict."""
             result = {}
             for key, val in vars(cfg).items():
                 if hasattr(val, '__dict__'):
                     result[key] = cfg_to_dict(val)
+                elif hasattr(val, 'tolist'):  # numpy arrays / tensors
+                    result[key] = val.tolist()
                 elif isinstance(val, (int, float, str, bool, list, tuple, type(None))):
                     result[key] = val
+                elif hasattr(val, 'item'):  # numpy scalars
+                    result[key] = val.item()
             return result
 
-        self._wandb_cfg = {
+        self._run_cfg = {
             "isaac_gym_task": task_name,
             "isaac_gym_seed": seed,
             "isaac_gym_normalize": normalize,
             "isaac_gym_env_config": cfg_to_dict(env_cfg),
+            "gt_conversion_config": {
+                "gt_default_joint_angles": gt_default_joint_angles,
+                "ig_default_joint_angles": default_joint_angles,
+                "dof_names": DOF_NAMES,
+                "action_scale": action_scale,
+                "obs_scale": obs_scale,
+                "lin_vel_scale": LIN_VEL_SCALE,
+                "ang_vel_scale": ANG_VEL_SCALE,
+                "dof_vel_scale": DOF_VEL_SCALE,
+                "commands_scale": COMMANDS_SCALE.tolist(),
+                "clip_observations": CLIP_OBSERVATIONS,
+                "clip_actions": CLIP_ACTIONS,
+            },
         }
+        self._run_cfg_logged = False
 
 
     def calculate_total_reward(self, rewbuffer, ep_infos, lenbuffer):
@@ -155,8 +188,15 @@ class OnlineEval:
         
         actor.eval()
 
-        if wandb.run is not None:
-            wandb.config.update(self._wandb_cfg, allow_val_change=True)
+        if wandb.run is not None and not self._run_cfg_logged:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(self._run_cfg, f, indent=2)
+                tmp_path = f.name
+            artifact = wandb.Artifact(name="eval_config", type="config")
+            artifact.add_file(tmp_path, name="eval_config.json")
+            wandb.log_artifact(artifact)
+            os.remove(tmp_path)
+            self._run_cfg_logged = True
 
         num_repetitions = 1
         
