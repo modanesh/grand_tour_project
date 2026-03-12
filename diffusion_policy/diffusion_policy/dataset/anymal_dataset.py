@@ -28,6 +28,12 @@ class AnymalDataset(BaseLowdimDataset):
             observations = f['observations'][:]
             actions = f['actions'][:]
             terminals = f['terminals'][:]
+
+        # offline_dataset.hdf5 stores 48D obs [lin_vel(3), ang_vel(3), gravity(3),
+        # commands(3), joint_pos(12), joint_vel(12), prev_actions(12)].
+        # Policy is trained on 36D obs (no prev_actions), so strip the last 12 dims.
+        if observations.shape[-1] == 48:
+            observations = observations[:, :36]
         
         # Convert to ReplayBuffer format
         # Compute episode_ends from terminals
