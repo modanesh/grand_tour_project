@@ -196,6 +196,12 @@ class OnlineEval:
         # Accumulate action stats for logging
         actions_all_list = []  # Store all actions for per-dimension stats
 
+        # Collect single-instance obs/actions for wandb Table logging (robot_index=0 only)
+        single_obs_gt_list = []      # GT-format unscaled obs (what policy sees)
+        single_obs_ig_list = []      # raw Isaac Gym scaled obs (what env outputs)
+        single_actions_gt_list = []  # GT absolute joint positions (policy output)
+        single_actions_ig_list = []  # Isaac Gym offset actions (sent to env)
+
         # max_episode_length = 1001
         for i in range(num_repetitions * int(max_episode_length)+2):
         #for i in tqdm(range(num_repetitions * int(max_episode_length)+2),desc="Online IG Eval"):
@@ -213,11 +219,15 @@ class OnlineEval:
                 # Store observations for per-dimension analysis
                 obs_all_list.append(obs.cpu().numpy())
             
+            single_obs_gt_list.append(obs[robot_index].cpu().numpy())  # GT-format (unscaled)
+
             actions = actor.act_inference(obs_normalized.detach())
-            
+
             # Convert actions from absolute positions (GrandTour format) to offsets (Isaac Gym format)
             actions_np = actions.detach().cpu().numpy()
             actions_isaac = make_actions_compatible(actions_np)
+            single_actions_gt_list.append(actions_np[robot_index])           # GT absolute positions
+            single_actions_ig_list.append(actions_isaac[robot_index])        # Isaac Gym offsets
             actions_isaac = torch.tensor(actions_isaac, device=actions.device, dtype=actions.dtype)
 
             # Store actions for per-dimension analysis (policy output, before conversion)
@@ -225,6 +235,7 @@ class OnlineEval:
                 actions_all_list.append(actions_np)
 
             obs, _, rews, dones, infos = env.step(actions_isaac.detach())
+            single_obs_ig_list.append(obs[robot_index, :-12].cpu().numpy())  # raw Isaac Gym obs (36D, scaled)
             obs = unscale_observations(obs, device=str(obs.device))
             obs = obs[:, :-12]  # Remove prev_actions, policy trained on 36D obs
 
@@ -316,6 +327,31 @@ class OnlineEval:
                 **actions_mean_per_dim_dict,  # Add per-dimension action means
             }
             
+            if wandb.run is not None and single_obs_gt_list:
+                obs_dim = len(single_obs_gt_list[0])
+                act_dim = len(single_actions_gt_list[0])
+                obs_cols  = ["step"] + [f"obs_{i}" for i in range(obs_dim)]
+                act_cols  = ["step"] + [f"action_{i}" for i in range(act_dim)]
+
+                obs_gt_table  = wandb.Table(columns=obs_cols)
+                obs_ig_table  = wandb.Table(columns=obs_cols)
+                act_gt_table  = wandb.Table(columns=act_cols)
+                act_ig_table  = wandb.Table(columns=act_cols)
+
+                for step in range(len(single_obs_gt_list)):
+                    obs_gt_table.add_data(step, *single_obs_gt_list[step].tolist())
+                    act_gt_table.add_data(step, *single_actions_gt_list[step].tolist())
+                for step in range(len(single_obs_ig_list)):
+                    obs_ig_table.add_data(step, *single_obs_ig_list[step].tolist())
+                    act_ig_table.add_data(step, *single_actions_ig_list[step].tolist())
+
+                wandb.log({
+                    "eval/obs_gt_format_unscaled":      obs_gt_table,   # what policy sees
+                    "eval/obs_isaacgym_format_scaled":  obs_ig_table,   # raw env output
+                    "eval/actions_gt_format_absolute":  act_gt_table,   # policy output (abs joint pos)
+                    "eval/actions_isaacgym_format_offsets": act_ig_table,  # sent to env (normalized offsets)
+                })
+
             return eval_score, n_eps_evaluated, scaled_rew_terms_avg, avg_episode_length, obs_stats
         else:
             eval_score, n_eps_evaluated, scaled_rew_terms_avg, avg_episode_length = self.calculate_total_reward(rewbuffer, ep_infos, lenbuffer)
