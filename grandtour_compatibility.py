@@ -53,11 +53,11 @@ def unscale_commands(commands_scaled):
 def unscale_joint_pos(joint_pos_scaled):
     """
     Unscale joint positions from Isaac Gym format to GrandTour format.
-    Isaac Gym: (dof_pos - default_dof_pos) * 1.0
-    GrandTour: joint_pos (absolute positions, unscaled)
-    Uses GT defaults so observations are centered around GT neutral stance.
+    Isaac Gym: (dof_pos - ig_default) * 1.0
+    GrandTour (offline_dataset.hdf5): raw absolute joint positions
+    Uses IG defaults to recover true absolute position: (scaled + ig_default) = actual_pos
     """
-    default_dof_pos = build_default_dof_pos(use_grand_tour=True)
+    default_dof_pos = build_default_dof_pos(use_grand_tour=False)  # IG defaults: recovers true absolute position
 
     if isinstance(joint_pos_scaled, torch.Tensor):
         default_dof_pos_torch = torch.tensor(default_dof_pos, device=joint_pos_scaled.device, dtype=joint_pos_scaled.dtype)

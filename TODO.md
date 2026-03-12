@@ -13,8 +13,14 @@ mean joint positions at neutral stance, and update if needed.
 
 ### HFE defaults assumed from memory
 The GT HFE values (`LF/RF_HFE: 0.84`, `LH/RH_HFE: -0.59`) came from prior
-notes, not from fresh dataset analysis. Should be confirmed against the actual
-dataset mean action/obs values.
+notes, not from fresh dataset analysis. These are stored in `gt_default_joint_angles`
+in `isaac_compatibility.py` but are currently unused since we switched to
+`offline_dataset.hdf5` (raw format) which stores true absolute positions.
+
+### offline_dataset_pp.hdf5 format unknown
+The post-processed dataset format is unknown — no preprocessing script was found.
+If `offline_dataset_pp.hdf5` is ever used again, the observation format must be
+confirmed before deciding whether to apply `unscale_observations()`.
 
 ## Fundamental Distribution Shift (Isaac Gym vs Grand Tour)
 
