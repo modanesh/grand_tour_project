@@ -82,7 +82,7 @@ class OnlineEval:
             dataset = load_hdf5_dataset(dataset_path)
             self.state_mean, self.state_std = compute_mean_std(dataset["observations"], eps=1e-3)
 
-        # Log Isaac Gym environment config to existing wandb run
+        # Store env config for wandb logging later (wandb may not be initialized yet at __init__ time)
         def cfg_to_dict(cfg):
             """Recursively convert legged_gym config object to a serializable dict."""
             result = {}
@@ -93,12 +93,12 @@ class OnlineEval:
                     result[key] = val
             return result
 
-        wandb.config.update({
+        self._wandb_cfg = {
             "isaac_gym_task": task_name,
             "isaac_gym_seed": seed,
             "isaac_gym_normalize": normalize,
             "isaac_gym_env_config": cfg_to_dict(env_cfg),
-        }, allow_val_change=True)
+        }
 
 
     def calculate_total_reward(self, rewbuffer, ep_infos, lenbuffer):
@@ -154,6 +154,9 @@ class OnlineEval:
     ) -> np.ndarray:
         
         actor.eval()
+
+        if wandb.run is not None:
+            wandb.config.update(self._wandb_cfg, allow_val_change=True)
 
         num_repetitions = 1
         
