@@ -97,7 +97,7 @@ def scale_commands(commands_xy_yaw):
     return commands_xy_yaw * COMMANDS_SCALE
 
 def make_actions_compatible(absolute_positions):
-    default_dof_pos = build_default_dof_pos(use_grand_tour=True)
+    default_dof_pos = build_default_dof_pos(use_grand_tour=False)  # must use IG defaults: Isaac Gym applies target = ig_default + action * action_scale
     return (absolute_positions - default_dof_pos) / action_scale
 
 def scale_lin_vel(lin_vel):

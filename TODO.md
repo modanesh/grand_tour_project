@@ -19,12 +19,17 @@ dataset mean action/obs values.
 ## Fundamental Distribution Shift (Isaac Gym vs Grand Tour)
 
 Isaac Gym initialises the robot at its own defaults (LF_HFE=0.4), not Grand
-Tour defaults (LF_HFE=0.84). Our `unscale_joint_pos` uses GT defaults to
-shift observations into the GT reference frame, but this is a pragmatic hack —
-the robot's actual physical configuration in Isaac Gym at rest does not match
-the Grand Tour neutral stance. The correct fix would be to set Isaac Gym's
-`default_dof_pos` in the env config to match Grand Tour defaults, so both the
-initial stance and the action reference frame are consistent.
+Tour defaults (LF_HFE=0.84). `make_actions_compatible` and
+`unscale_previous_actions` must use IG defaults because Isaac Gym internally
+applies `target = ig_default + action * action_scale`. Using GT defaults here
+shifts every commanded position by `ig_default - gt_default` (~0.44 rad for
+HFE), causing the robot to collapse immediately (reward=0).
+
+`unscale_joint_pos` uses GT defaults as a pragmatic hack to shift dof_pos
+observations into the GT reference frame (so they look like training data).
+The correct long-term fix would be to set Isaac Gym's `default_dof_pos` in the
+env config to match Grand Tour defaults, making the action and observation
+reference frames consistent without any hacks.
 
 ## `normalize` Parameter is Now Dead Code (`eval_isaac_v2.py`)
 

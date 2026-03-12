@@ -82,10 +82,10 @@ def unscale_previous_actions(actions_scaled):
     GrandTour stores actions as absolute positions
 
     This is the inverse of make_actions_compatible():
-    - make_actions_compatible: absolute -> (absolute - gt_default) / action_scale
-    - unscale_previous_actions: offset -> offset * action_scale + gt_default
+    - make_actions_compatible: absolute -> (absolute - ig_default) / action_scale
+    - unscale_previous_actions: offset -> offset * action_scale + ig_default
     """
-    default_dof_pos = build_default_dof_pos(use_grand_tour=True)
+    default_dof_pos = build_default_dof_pos(use_grand_tour=False)  # must match make_actions_compatible
 
     if isinstance(actions_scaled, torch.Tensor):
         default_dof_pos_torch = torch.tensor(default_dof_pos, device=actions_scaled.device, dtype=actions_scaled.dtype)
