@@ -59,44 +59,49 @@ print(f"Device:            {args.device}")
 print(f"Num envs:          {args.num_envs}")
 print("=" * 70)
 
-# group_obs_term_dim: dict[group_name, list[tuple[term_name, slice]]]
-# (available in IsaacLab >= 1.0; fall back to manual inspection if absent)
+# group_obs_term_dim: dict[group_name, list[int]]  (dims per term, one entry per term)
+# active_terms:       dict[group_name, list[ObsTermCfg]]  (term configs, same order)
 if hasattr(obs_manager, "group_obs_term_dim"):
-    term_dims = obs_manager.group_obs_term_dim
+    raw_dims = obs_manager.group_obs_term_dim
 elif hasattr(obs_manager, "_group_obs_term_dim"):
-    term_dims = obs_manager._group_obs_term_dim
+    raw_dims = obs_manager._group_obs_term_dim
 else:
-    term_dims = None
+    raw_dims = None
+
+def _get_term_name(term) -> str:
+    """Extract name string from a term config or string."""
+    if isinstance(term, str):
+        return term
+    return getattr(term, "name", str(term))
+
+def _build_term_list(group_name: str) -> list:
+    """
+    Return list of (term_name, n_dims) pairs for a group,
+    using active_terms for names and group_obs_term_dim for sizes.
+    """
+    dims = raw_dims[group_name]  # list[int]
+    terms = obs_manager.active_terms.get(group_name, [])
+    if len(terms) == len(dims):
+        return [(_get_term_name(t), d) for t, d in zip(terms, dims)]
+    # Shape mismatch – fall back to anonymous labels
+    return [(f"term_{i}", d) for i, d in enumerate(dims)]
 
 # ── Per-group, per-term breakdown ─────────────────────────────────────────────
-def _print_group(group_name: str, terms):
+def _print_group(group_name: str, named_terms: list):
     """Print one observation group with per-dimension labels."""
     print(f"\n  Group: '{group_name}'")
     print(f"  {'Dim':>8}  {'Term':<30}  {'Sub-index'}")
     print(f"  {'-'*8}  {'-'*30}  {'-'*20}")
 
     global_idx = 0
-    for term_name, dim_info in terms:
-        # dim_info may be an int (total dims for the term) or a slice
-        if isinstance(dim_info, int):
-            n_dims = dim_info
-        elif isinstance(dim_info, slice):
-            n_dims = dim_info.stop - dim_info.start
-            global_idx = dim_info.start  # re-anchor
-        else:
-            n_dims = int(dim_info)
-
+    for term_name, n_dims in named_terms:
         if n_dims == 1:
             print(f"  {global_idx:>8}  {term_name:<30}  [0]")
         else:
-            # Emit one row per sub-dimension with a helpful sub-label
             sub_labels = _sub_labels(term_name, n_dims)
             for sub_i in range(n_dims):
                 label = sub_labels[sub_i] if sub_i < len(sub_labels) else str(sub_i)
-                print(
-                    f"  {global_idx + sub_i:>8}  {term_name:<30}  [{sub_i}] {label}"
-                )
-
+                print(f"  {global_idx + sub_i:>8}  {term_name:<30}  [{sub_i}] {label}")
         global_idx += n_dims
 
 
@@ -136,9 +141,9 @@ def _sub_labels(term_name: str, n: int):
     return [str(i) for i in range(n)]
 
 
-if term_dims is not None:
-    for group_name, terms in term_dims.items():
-        _print_group(group_name, terms)
+if raw_dims is not None:
+    for group_name in raw_dims:
+        _print_group(group_name, _build_term_list(group_name))
 else:
     # Fallback: reconstruct from active_terms + a reset observation
     print("\n  [!] group_obs_term_dim not found – falling back to shape introspection")
