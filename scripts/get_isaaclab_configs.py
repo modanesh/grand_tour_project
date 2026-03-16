@@ -79,7 +79,9 @@ def _build_term_list(group_name: str) -> list:
     Return list of (term_name, n_dims) pairs for a group,
     using active_terms for names and group_obs_term_dim for sizes.
     """
-    dims = raw_dims[group_name]  # list[int]
+    dims = raw_dims[group_name]  # list[int | tuple]
+    # Normalise: (3,) → 3
+    dims = [int(d[0]) if isinstance(d, tuple) else int(d) for d in dims]
     terms = obs_manager.active_terms.get(group_name, [])
     if len(terms) == len(dims):
         return [(_get_term_name(t), d) for t, d in zip(terms, dims)]
