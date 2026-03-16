@@ -105,13 +105,14 @@ def _print_group(group_name: str, named_terms: list):
         global_idx += n_dims
 
 
-def _sub_labels(term_name: str, n: int):
+def _sub_labels(term_name: str, n):
     """
     Best-effort per-dimension labels for common IsaacLab observation terms.
     Falls back to numeric indices for unknown terms.
     """
     from isaac_compatibility import DOF_NAMES  # project-local
 
+    n = int(n)  # guard against numpy int types
     xyz = ["x", "y", "z"]
     rpy = ["roll", "pitch", "yaw"]
 
