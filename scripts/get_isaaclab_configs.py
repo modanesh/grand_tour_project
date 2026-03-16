@@ -194,22 +194,26 @@ print("Action space:")
 print("=" * 70)
 action_manager = getattr(env, "action_manager", None)
 if action_manager is not None and hasattr(action_manager, "active_terms"):
+    terms = action_manager.active_terms
+    # active_terms may be a list or a dict
+    if isinstance(terms, dict):
+        terms = [t for group in terms.values() for t in group]
+    print(f"  {'Dim':>8}  {'Term':<30}  {'Sub-index'}")
+    print(f"  {'-'*8}  {'-'*30}  {'-'*20}")
     idx = 0
-    for group_name, terms in action_manager.active_terms.items():
-        print(f"\n  Group: '{group_name}'")
-        for term in terms:
-            term_name = term.name if hasattr(term, "name") else str(term)
-            # Try to get dim from the term's data_info
-            try:
-                term_dim = term.data.shape[-1]
-            except Exception:
-                term_dim = len(DOF_NAMES)
-            for sub_i in range(term_dim):
-                label = DOF_NAMES[sub_i] if sub_i < len(DOF_NAMES) else str(sub_i)
-                print(f"  {idx + sub_i:>8}  {term_name:<30}  [{sub_i}] {label}")
-            idx += term_dim
+    for term in terms:
+        term_name = term.name if hasattr(term, "name") else str(term)
+        try:
+            term_dim = term.data.shape[-1]
+        except Exception:
+            term_dim = len(DOF_NAMES)
+        for sub_i in range(term_dim):
+            label = DOF_NAMES[sub_i] if sub_i < len(DOF_NAMES) else str(sub_i)
+            print(f"  {idx + sub_i:>8}  {term_name:<30}  [{sub_i}] {label}")
+        idx += term_dim
 else:
-    print(f"  12 dims (joint position targets)")
+    print(f"  {'Dim':>8}  {'Term':<30}  {'Sub-index'}")
+    print(f"  {'-'*8}  {'-'*30}  {'-'*20}")
     for i, name in enumerate(DOF_NAMES):
         print(f"  {i:>8}  joint_position_target            [{i}] {name}")
 
