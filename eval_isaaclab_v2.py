@@ -233,45 +233,29 @@ class OnlineEval:
         first_obs = True
         
         for i in range(max_steps + 2):
-            # Convert IsaacLab observations to GrandTour format
-            # This includes un-scaling velocities/commands and converting joint positions
-            if self.unscale_observations:
-                obs = unscale_observations(obs, device=obs.device)
-            elif self.apply_centering_offset and self.joint_pos_offset is not None:
-                # Fallback: only apply joint position offset (legacy behavior)
-                offset = self.joint_pos_offset.to(obs.device)
-                obs[:, 12:24] = obs[:, 12:24] + offset
-
-            # Debug: Check joint ordering on first observation
+            # Sanity check on raw IsaacLab obs BEFORE any conversion.
+            # At reset, raw obs[12:24] = (q - isaac_default) * 1.0 ≈ 0.
             if first_obs and i == 0:
-                print(f"\n=== Observation Debug (step {i}) ===")
+                raw_joint_pos = obs[0, 12:24].cpu().numpy()
+                max_diff = np.max(np.abs(raw_joint_pos))
+                tolerance = 0.5  # rad
+                print(f"\n=== Observation Debug (step {i}, RAW IsaacLab obs) ===")
                 print(f"Base lin vel [0:3]: {obs[0, 0:3].cpu().numpy()}")
                 print(f"Base ang vel [3:6]: {obs[0, 3:6].cpu().numpy()}")
-                print(f"Joint pos [12:24]: {obs[0, 12:24].cpu().numpy()}")
-                
-                # Check against IsaacLab defaults (robot spawns in standing pose)
-                isaac_defaults = torch.tensor(build_isaac_default_dof_pos(), device=obs.device, dtype=obs.dtype)
-                print(f"IsaacLab defaults: {isaac_defaults.cpu().numpy()}")
-                diff_isaac = (obs[0, 12:24] - isaac_defaults).cpu().numpy()
-                print(f"Joint pos diff from IsaacLab defaults: {diff_isaac}")
-                
-                # Also show GT defaults for reference
-                gt_defaults = torch.tensor(build_grand_tour_default_dof_pos(), device=obs.device, dtype=obs.dtype)
-                print(f"GT defaults: {gt_defaults.cpu().numpy()}")
-                
-                # Fail loudly if joint ordering mismatch detected
-                # At reset, joint positions should be close to IsaacLab defaults (standing pose)
-                max_diff = np.max(np.abs(diff_isaac))
-                tolerance = 0.5  # rad - reasonable tolerance for initial pose
+                print(f"Raw joint pos [12:24] (should be ~0): {raw_joint_pos}")
+                print(f"Max abs deviation from 0: {max_diff:.4f} rad")
                 if max_diff > tolerance:
+                    isaac_defaults = torch.tensor(build_isaac_default_dof_pos(), device=obs.device, dtype=obs.dtype)
+                    gt_defaults = torch.tensor(build_grand_tour_default_dof_pos(), device=obs.device, dtype=obs.dtype)
                     error_msg = (
                         f"\n{'='*60}\n"
                         f"JOINT ORDERING MISMATCH DETECTED!\n"
                         f"{'='*60}\n"
-                        f"Max joint position difference from IsaacLab defaults: {max_diff:.4f} rad (tolerance: {tolerance} rad)\n"
-                        f"\nObserved joint positions: {obs[0, 12:24].cpu().numpy()}\n"
-                        f"Expected IsaacLab defaults: {isaac_defaults.cpu().numpy()}\n"
-                        f"Difference: {diff_isaac}\n"
+                        f"Raw obs[12:24] at reset should be ~0 (q - isaac_default), "
+                        f"but max deviation is {max_diff:.4f} rad (tolerance: {tolerance} rad)\n"
+                        f"\nRaw joint pos obs: {raw_joint_pos}\n"
+                        f"IsaacLab defaults:  {isaac_defaults.cpu().numpy()}\n"
+                        f"GT defaults:        {gt_defaults.cpu().numpy()}\n"
                         f"\nPossible causes:\n"
                         f"1. IsaacLab joint order differs from DOF_NAMES order\n"
                         f"2. Robot spawned in unexpected initial pose\n"
@@ -281,9 +265,18 @@ class OnlineEval:
                         f"{'='*60}"
                     )
                     raise RuntimeError(error_msg)
-                print(f"✓ Joint ordering check passed (max diff from IsaacLab defaults: {max_diff:.4f} rad)")
+                print(f"✓ Joint ordering check passed (max deviation from 0: {max_diff:.4f} rad)")
                 print("=====================================\n")
                 first_obs = False
+
+            # Convert IsaacLab observations to GrandTour format.
+            # Only joint_pos centering differs; all other scales are identical.
+            if self.unscale_observations:
+                obs = unscale_observations(obs, device=obs.device)
+            elif self.apply_centering_offset and self.joint_pos_offset is not None:
+                # Fallback: only apply joint position offset (legacy behavior)
+                offset = self.joint_pos_offset.to(obs.device)
+                obs[:, 12:24] = obs[:, 12:24] + offset
 
             obs_normalized = (
                 (obs - state_mean_torch) / state_std_torch if self.normalize else obs
