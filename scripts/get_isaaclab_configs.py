@@ -305,6 +305,7 @@ for i, name in enumerate(DOF_NAMES):
 print("\n" + "=" * 70)
 
 # ── 9. Cleanup ────────────────────────────────────────────────────────────────
+sys.stdout.flush()
 env.close()
 simulation_app.close()
 
