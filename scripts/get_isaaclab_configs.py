@@ -235,21 +235,31 @@ def _action_scale_from_cfg(actions_cfg):
             return term.scale
     return None
 
-def _obs_term_scale(group_cfg, *term_names):
-    """Return .scale for the first matching observation term name."""
-    for name in term_names:
-        term = getattr(group_cfg, name, None)
-        if term is not None and hasattr(term, "scale"):
-            return term.scale
+def _term_scale(term):
+    """Return scale from a term object, trying .cfg.scale then .scale."""
+    for getter in (lambda t: t.cfg.scale, lambda t: t.scale):
+        try:
+            return getter(term)
+        except AttributeError:
+            pass
     return None
 
-policy_obs   = env_cfg.observations.policy
-action_scale = _action_scale_from_cfg(env_cfg.actions)
-obs_scale    = _obs_term_scale(policy_obs, "joint_pos", "joint_pos_rel")
-LIN_VEL_SCALE  = _obs_term_scale(policy_obs, "base_lin_vel")
-ANG_VEL_SCALE  = _obs_term_scale(policy_obs, "base_ang_vel")
-DOF_VEL_SCALE  = _obs_term_scale(policy_obs, "joint_vel", "joint_vel_rel")
-COMMANDS_SCALE = _obs_term_scale(policy_obs, "velocity_commands")
+def _build_obs_scale_map():
+    """Build {term_name: scale} from obs_manager.active_terms."""
+    scale_map = {}
+    for terms in obs_manager.active_terms.values():
+        for term in terms:
+            name = term.name if hasattr(term, "name") else str(term)
+            scale_map[name] = _term_scale(term)
+    return scale_map
+
+obs_scale_map = _build_obs_scale_map()
+action_scale  = _action_scale_from_cfg(env_cfg.actions)
+obs_scale     = obs_scale_map.get("joint_pos") or obs_scale_map.get("joint_pos_rel")
+LIN_VEL_SCALE  = obs_scale_map.get("base_lin_vel")
+ANG_VEL_SCALE  = obs_scale_map.get("base_ang_vel")
+DOF_VEL_SCALE  = obs_scale_map.get("joint_vel") or obs_scale_map.get("joint_vel_rel")
+COMMANDS_SCALE = obs_scale_map.get("velocity_commands")
 
 print("\n" + "=" * 70)
 print("Scaling factors (from IsaacLab env_cfg):")
