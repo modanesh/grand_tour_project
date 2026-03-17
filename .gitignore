@@ -1,3 +1,4 @@
+*.swp
 /venv38
 /.env
 /missions
