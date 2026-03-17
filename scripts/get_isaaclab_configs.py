@@ -220,21 +220,47 @@ else:
 print("\n" + "=" * 70)
 
 # ── 8. Scaling factors & default poses ───────────────────────────────────────
+import dataclasses
 from isaac_compatibility import (
-    action_scale, obs_scale,
-    LIN_VEL_SCALE, ANG_VEL_SCALE, DOF_VEL_SCALE, COMMANDS_SCALE,
     build_isaac_default_dof_pos, build_grand_tour_default_dof_pos,
 )
 
+def _action_scale_from_cfg(actions_cfg):
+    """Return .scale from the first action term that has one."""
+    if not dataclasses.is_dataclass(actions_cfg):
+        return None
+    for field in dataclasses.fields(actions_cfg):
+        term = getattr(actions_cfg, field.name)
+        if hasattr(term, "scale"):
+            return term.scale
+    return None
+
+def _obs_term_scale(group_cfg, *term_names):
+    """Return .scale for the first matching observation term name."""
+    for name in term_names:
+        term = getattr(group_cfg, name, None)
+        if term is not None and hasattr(term, "scale"):
+            return term.scale
+    return None
+
+policy_obs   = env_cfg.observations.policy
+action_scale = _action_scale_from_cfg(env_cfg.actions)
+obs_scale    = _obs_term_scale(policy_obs, "joint_pos", "joint_pos_rel")
+LIN_VEL_SCALE  = _obs_term_scale(policy_obs, "base_lin_vel")
+ANG_VEL_SCALE  = _obs_term_scale(policy_obs, "base_ang_vel")
+DOF_VEL_SCALE  = _obs_term_scale(policy_obs, "joint_vel", "joint_vel_rel")
+COMMANDS_SCALE = _obs_term_scale(policy_obs, "velocity_commands")
+
 print("\n" + "=" * 70)
-print("Scaling factors:")
+print("Scaling factors (from IsaacLab env_cfg):")
 print("=" * 70)
 print(f"  {'action_scale':<30}  {action_scale}")
 print(f"  {'obs_scale (joint_pos)':<30}  {obs_scale}")
 print(f"  {'LIN_VEL_SCALE':<30}  {LIN_VEL_SCALE}")
 print(f"  {'ANG_VEL_SCALE':<30}  {ANG_VEL_SCALE}")
 print(f"  {'DOF_VEL_SCALE':<30}  {DOF_VEL_SCALE}")
-print(f"  {'COMMANDS_SCALE (vx,vy,yaw)':<30}  {COMMANDS_SCALE.tolist()}")
+_cs = COMMANDS_SCALE.tolist() if hasattr(COMMANDS_SCALE, "tolist") else COMMANDS_SCALE
+print(f"  {'COMMANDS_SCALE (vx,vy,yaw)':<30}  {_cs}")
 
 print("\n" + "=" * 70)
 print("Default DOF positions (rad):")
