@@ -219,6 +219,36 @@ else:
 
 print("\n" + "=" * 70)
 
-# ── 8. Cleanup ────────────────────────────────────────────────────────────────
+# ── 8. Scaling factors & default poses ───────────────────────────────────────
+from isaac_compatibility import (
+    action_scale, obs_scale,
+    LIN_VEL_SCALE, ANG_VEL_SCALE, DOF_VEL_SCALE, COMMANDS_SCALE,
+    build_isaac_default_dof_pos, build_grand_tour_default_dof_pos,
+)
+
+print("\n" + "=" * 70)
+print("Scaling factors:")
+print("=" * 70)
+print(f"  {'action_scale':<30}  {action_scale}")
+print(f"  {'obs_scale (joint_pos)':<30}  {obs_scale}")
+print(f"  {'LIN_VEL_SCALE':<30}  {LIN_VEL_SCALE}")
+print(f"  {'ANG_VEL_SCALE':<30}  {ANG_VEL_SCALE}")
+print(f"  {'DOF_VEL_SCALE':<30}  {DOF_VEL_SCALE}")
+print(f"  {'COMMANDS_SCALE (vx,vy,yaw)':<30}  {COMMANDS_SCALE.tolist()}")
+
+print("\n" + "=" * 70)
+print("Default DOF positions (rad):")
+print("=" * 70)
+print(f"  {'Joint':<12}  {'Isaac Gym':>12}  {'Grand Tour':>12}  {'Delta':>12}")
+print(f"  {'-'*12}  {'-'*12}  {'-'*12}  {'-'*12}")
+isaac_defaults = build_isaac_default_dof_pos()
+gt_defaults = build_grand_tour_default_dof_pos()
+for i, name in enumerate(DOF_NAMES):
+    delta = gt_defaults[i] - isaac_defaults[i]
+    print(f"  {name:<12}  {isaac_defaults[i]:>12.4f}  {gt_defaults[i]:>12.4f}  {delta:>+12.4f}")
+
+print("\n" + "=" * 70)
+
+# ── 9. Cleanup ────────────────────────────────────────────────────────────────
 env.close()
 simulation_app.close()
