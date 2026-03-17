@@ -254,6 +254,13 @@ def _build_obs_scale_map():
     return scale_map
 
 obs_scale_map = _build_obs_scale_map()
+print("\nDEBUG obs_scale_map:", obs_scale_map)
+# DEBUG: show raw attributes on first obs term
+for _terms in obs_manager.active_terms.values():
+    if _terms:
+        _t = _terms[0]
+        print(f"DEBUG first term type: {type(_t)}, attrs: {[a for a in dir(_t) if not a.startswith('__')]}")
+        break
 action_scale  = _action_scale_from_cfg(env_cfg.actions)
 obs_scale     = obs_scale_map.get("joint_pos") or obs_scale_map.get("joint_pos_rel")
 LIN_VEL_SCALE  = obs_scale_map.get("base_lin_vel")
