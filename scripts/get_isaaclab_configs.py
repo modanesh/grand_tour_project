@@ -254,12 +254,24 @@ def _build_obs_scale_map():
     return scale_map
 
 obs_scale_map = _build_obs_scale_map()
-print("\nDEBUG obs_scale_map:", obs_scale_map)
-# DEBUG: show raw attributes on first obs term
-for _terms in obs_manager.active_terms.values():
-    if _terms:
-        _t = _terms[0]
-        print(f"DEBUG first term type: {type(_t)}, attrs: {[a for a in dir(_t) if not a.startswith('__')]}")
+# DEBUG: check env_cfg.observations.policy.base_lin_vel directly
+if hasattr(env_cfg.observations, "policy") and hasattr(env_cfg.observations.policy, "base_lin_vel"):
+    _bl = env_cfg.observations.policy.base_lin_vel
+    print(f"\nDEBUG base_lin_vel type: {type(_bl)}, is_dataclass: {dataclasses.is_dataclass(_bl)}")
+    if dataclasses.is_dataclass(_bl):
+        for _f in dataclasses.fields(_bl):
+            print(f"  field '{_f.name}' = {getattr(_bl, _f.name)!r}")
+    else:
+        print(f"  repr: {_bl!r}")
+# DEBUG: check obs_manager._terms
+if hasattr(obs_manager, "_terms"):
+    for _gname, _gterms in obs_manager._terms.items():
+        print(f"\nDEBUG obs_manager._terms['{_gname}'] first term:")
+        if _gterms:
+            _t = _gterms[0]
+            print(f"  type: {type(_t)}, attrs: {[a for a in dir(_t) if not a.startswith('_')][:15]}")
+            if hasattr(_t, "cfg"):
+                print(f"  .cfg type: {type(_t.cfg)}, .cfg.scale = {getattr(_t.cfg, 'scale', 'NOATTR')!r}")
         break
 action_scale  = _action_scale_from_cfg(env_cfg.actions)
 obs_scale     = obs_scale_map.get("joint_pos") or obs_scale_map.get("joint_pos_rel")
