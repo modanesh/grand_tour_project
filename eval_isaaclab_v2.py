@@ -45,21 +45,21 @@ from grandtour_compatibility import (
 )
 
 
-def compute_joint_pos_offset():
-    """
-    Compute the offset between IsaacLab and GrandTour default joint angles.
-    This offset needs to be added to IsaacLab observations to convert them
-    to GrandTour format (what the policy was trained on).
+# def compute_joint_pos_offset():
+#     """
+#     Compute the offset between IsaacLab and GrandTour default joint angles.
+#     This offset needs to be added to IsaacLab observations to convert them
+#     to GrandTour format (what the policy was trained on).
 
-    Returns:
-        np.ndarray: Offset of shape (12,) to add to joint position observations (indices 12-23)
-    """
-    offset = np.zeros(12, dtype=np.float32)
-    for i, name in enumerate(DOF_NAMES):
-        isaac_default = isaac_default_joint_angles[name]
-        gt_default = grand_tour_default_joint_angles[name]
-        offset[i] = isaac_default - gt_default  # IsaacLab - GrandTour
-    return offset
+#     Returns:
+#         np.ndarray: Offset of shape (12,) to add to joint position observations (indices 12-23)
+#     """
+#     offset = np.zeros(12, dtype=np.float32)
+#     for i, name in enumerate(DOF_NAMES):
+#         isaac_default = isaac_default_joint_angles[name]
+#         gt_default = grand_tour_default_joint_angles[name]
+#         offset[i] = isaac_default - gt_default  # IsaacLab - GrandTour
+#     return offset
 
 
 def verify_joint_ordering(obs_joint_pos, expected_defaults, tolerance=0.1):
@@ -101,17 +101,17 @@ class OnlineEval:
         from isaaclab_tasks.utils import parse_env_cfg
 
         self.include_prev_actions = include_prev_actions
-        self.normalize = normalize
+        self.normalize = False
         self.apply_centering_offset = apply_centering_offset
 
         # Compute and store the joint position offset for centering correction
         # IsaacLab centers on standing pose defaults, but policy was trained on GrandTour defaults
-        if self.apply_centering_offset:
-            joint_pos_offset = compute_joint_pos_offset()
-            print(f"Applying joint position centering offset: {joint_pos_offset}")
-            self.joint_pos_offset = torch.tensor(joint_pos_offset, dtype=torch.float32)
-        else:
-            self.joint_pos_offset = None
+        # if self.apply_centering_offset:
+        #     joint_pos_offset = compute_joint_pos_offset()
+        #     print(f"Applying joint position centering offset: {joint_pos_offset}")
+        #     self.joint_pos_offset = torch.tensor(joint_pos_offset, dtype=torch.float32)
+        # else:
+        #     self.joint_pos_offset = None
 
         # Store flag for full observation un-scaling (IsaacLab -> GrandTour)
         # IsaacLab observations are scaled; GrandTour policy expects unscaled observations
@@ -269,14 +269,14 @@ class OnlineEval:
                 print("=====================================\n")
                 first_obs = False
 
-            # Convert IsaacLab observations to GrandTour format.
-            # Only joint_pos centering differs; all other scales are identical.
-            if self.unscale_observations:
-                obs = unscale_observations(obs, device=obs.device)
-            elif self.apply_centering_offset and self.joint_pos_offset is not None:
-                # Fallback: only apply joint position offset (legacy behavior)
-                offset = self.joint_pos_offset.to(obs.device)
-                obs[:, 12:24] = obs[:, 12:24] + offset
+            # # Convert IsaacLab observations to GrandTour format.
+            # # Only joint_pos centering differs; all other scales are identical.
+            # if self.unscale_observations:
+            #     obs = unscale_observations(obs, device=obs.device)
+            # elif self.apply_centering_offset and self.joint_pos_offset is not None:
+            #     # Fallback: only apply joint position offset (legacy behavior)
+            #     offset = self.joint_pos_offset.to(obs.device)
+            #     obs[:, 12:24] = obs[:, 12:24] + offset
 
             obs_normalized = (
                 (obs - state_mean_torch) / state_std_torch if self.normalize else obs
@@ -298,7 +298,7 @@ class OnlineEval:
             
             # Convert actions from GrandTour format (absolute) to IsaacLab format (offsets)
             # IsaacLab expects: action = (target_pos - default_pos) / action_scale
-            actions_isaaclab = make_actions_compatible(actions)
+            actions_isaaclab = 2*actions
 
             step_result = env.step(actions_isaaclab.detach())
 
