@@ -281,6 +281,35 @@ action_isaac = (action_gt - default_dof_pos) / action_scale
 action_gt = action_isaac * action_scale + default_dof_pos
 ```
 
+## Migration from IsaacGym to IsaacLab
+
+### One-Time Installation for Isaaclab
+
+Using a conda environment is recommended for reproducible environments. 
+
+```bash
+conda create -n isaaclab-2-0-2 python=3.10
+```
+
+Then proceed to Install IsaacLab v2.0.2 (compatible with IsaacSim 4.5.x) following the [IsaacLab v2.0.2 instructions](https://isaac-sim.github.io/IsaacLab/v2.0.2/source/setup/installation/binaries_installation.html).
+
+### Quickstart
+
+Run the following to run `diffuseloco.py` on IsaacLab as an online eval environment.
+
+```bash
+# activate conda env
+conda activate isaaclab-2-0-2 (or the env that you named)
+
+# configure diffuse_policy lib path
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/diffusion_policy"
+
+# the config file is located at
+# ./diffusion_policy/diffusion_policy/config/anymal_diffusion_policy_isaaclab.yaml
+python diffuseloco.py --config-name=anymal_diffusion_policy_isaaclab
+```
+
+
 ---
 
 ## Acknowledgments

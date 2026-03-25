@@ -8,7 +8,7 @@ import os
 
 # Add parent directory to path to import OnlineEval
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
-from eval_isaac_v2 import OnlineEval
+from eval_isaaclab_v2 import OnlineEval
 from isaac_compatibility import make_actions_compatible
 
 
@@ -38,7 +38,7 @@ class DiffusionPolicyWrapper(nn.Module):
 class AnymalRunner(BaseLowdimRunner):
     def __init__(self, 
                  output_dir,
-                 task_name="anymal_d_flat",
+                 task_name="Isaac-Velocity-Flat-Anymal-D-v0",
                  seed=27,
                  normalize=False,
                  dataset_path="offline_dataset.hdf5",
