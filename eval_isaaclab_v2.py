@@ -45,22 +45,6 @@ from grandtour_compatibility import (
 )
 
 
-# def compute_joint_pos_offset():
-#     """
-#     Compute the offset between IsaacLab and GrandTour default joint angles.
-#     This offset needs to be added to IsaacLab observations to convert them
-#     to GrandTour format (what the policy was trained on).
-
-#     Returns:
-#         np.ndarray: Offset of shape (12,) to add to joint position observations (indices 12-23)
-#     """
-#     offset = np.zeros(12, dtype=np.float32)
-#     for i, name in enumerate(DOF_NAMES):
-#         isaac_default = isaac_default_joint_angles[name]
-#         gt_default = grand_tour_default_joint_angles[name]
-#         offset[i] = isaac_default - gt_default  # IsaacLab - GrandTour
-#     return offset
-
 
 def verify_joint_ordering(obs_joint_pos, expected_defaults, tolerance=0.1):
     """
@@ -101,17 +85,8 @@ class OnlineEval:
         from isaaclab_tasks.utils import parse_env_cfg
 
         self.include_prev_actions = include_prev_actions
-        self.normalize = False
+        self.normalize = normalize
         self.apply_centering_offset = apply_centering_offset
-
-        # Compute and store the joint position offset for centering correction
-        # IsaacLab centers on standing pose defaults, but policy was trained on GrandTour defaults
-        # if self.apply_centering_offset:
-        #     joint_pos_offset = compute_joint_pos_offset()
-        #     print(f"Applying joint position centering offset: {joint_pos_offset}")
-        #     self.joint_pos_offset = torch.tensor(joint_pos_offset, dtype=torch.float32)
-        # else:
-        #     self.joint_pos_offset = None
 
         # Store flag for full observation un-scaling (IsaacLab -> GrandTour)
         # IsaacLab observations are scaled; GrandTour policy expects unscaled observations
@@ -142,12 +117,6 @@ class OnlineEval:
         self.env = env
         self.dt = env.step_dt
 
-        # Load normalization stats
-        if self.normalize:
-            dataset = load_hdf5_dataset(dataset_path)
-            self.state_mean, self.state_std = compute_mean_std(
-                dataset["observations"], eps=1e-3
-            )
 
     def calculate_total_reward(self, rewbuffer, ep_infos, lenbuffer):
         """Calculate mean reward from episode buffers"""
@@ -209,17 +178,6 @@ class OnlineEval:
             else 1000
         )
 
-        if self.normalize:
-            state_mean_torch = torch.tensor(
-                self.state_mean, dtype=torch.float32, device=device
-            )
-            state_std_torch = torch.tensor(
-                self.state_std, dtype=torch.float32, device=device
-            )
-        else:
-            state_mean_torch = None
-            state_std_torch = None
-
         cur_reward_sum = torch.zeros(num_envs, dtype=torch.float, device=device)
         episode_lengths = torch.zeros(num_envs, dtype=torch.long, device=device)
         rewbuffer = []
@@ -278,9 +236,9 @@ class OnlineEval:
             #     offset = self.joint_pos_offset.to(obs.device)
             #     obs[:, 12:24] = obs[:, 12:24] + offset
 
-            obs_normalized = (
-                (obs - state_mean_torch) / state_std_torch if self.normalize else obs
-            )
+            # obs_normalized = (
+            #     (obs - state_mean_torch) / state_std_torch if self.normalize else obs
+            # )
 
             obs_stats_list.append(
                 {
@@ -293,12 +251,12 @@ class OnlineEval:
             obs_all_list.append(obs.cpu().numpy())
 
             # Policy outputs actions in GrandTour format (absolute positions)
-            actions = actor.act_inference(obs_normalized.detach())
+            actions = actor.act_inference(obs.detach())
             actions_all_list.append(actions.cpu().numpy())
             
             # Convert actions from GrandTour format (absolute) to IsaacLab format (offsets)
             # IsaacLab expects: action = (target_pos - default_pos) / action_scale
-            actions_isaaclab = 2*actions
+            actions_isaaclab = 2*actions # multiplying by 2 to convert the Grand Tour raw joint pos to the 2x IsaacLab scale
 
             step_result = env.step(actions_isaaclab.detach())
 
