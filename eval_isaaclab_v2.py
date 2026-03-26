@@ -110,6 +110,23 @@ class OnlineEval:
                 env_cfg.observations.enable_corruption = False
 
         # Create environment
+        # Enforce joint-position control with scale=1.0
+        import dataclasses as _dc
+        from isaaclab.envs.mdp.actions import JointPositionActionCfg
+        for _field in _dc.fields(env_cfg.actions):
+            _term = getattr(env_cfg.actions, _field.name)
+            if hasattr(_term, "asset_name") and hasattr(_term, "joint_names"):
+                setattr(
+                    env_cfg.actions,
+                    _field.name,
+                    JointPositionActionCfg(
+                        asset_name=_term.asset_name,
+                        joint_names=_term.joint_names,
+                        scale=1.0,
+                    ),
+                )
+                print(f"[action override] {_field.name}: {type(_term).__name__} -> JointPositionActionCfg(scale=1.0)")
+
         print(f">>>>>> :{env_cfg}")
         env = ManagerBasedRLEnv(cfg=env_cfg)
 
@@ -256,7 +273,7 @@ class OnlineEval:
             
             # Convert actions from GrandTour format (absolute) to IsaacLab format (offsets)
             # IsaacLab expects: action = (target_pos - default_pos) / action_scale
-            actions_isaaclab = 2*actions # multiplying by 2 to convert the Grand Tour raw joint pos to the 2x IsaacLab scale
+            actions_isaaclab = actions  # action_scale=1.0, no rescaling needed
 
             step_result = env.step(actions_isaaclab.detach())
 
