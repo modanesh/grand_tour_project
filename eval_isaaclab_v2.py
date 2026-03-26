@@ -110,6 +110,16 @@ class OnlineEval:
             if hasattr(env_cfg.observations, "enable_corruption"):
                 env_cfg.observations.enable_corruption = False
 
+        # Enforce scale=1.0 for all observation terms so scaling is explicit and known,
+        # regardless of what the underlying observation functions return internally.
+        if hasattr(env_cfg, "observations") and hasattr(env_cfg.observations, "policy"):
+            import dataclasses as _dc
+            for _field in _dc.fields(env_cfg.observations.policy):
+                _term = getattr(env_cfg.observations.policy, _field.name)
+                if hasattr(_term, "scale"):
+                    _term.scale = 1.0
+                    print(f"[obs scale override] {_field.name}: scale=1.0")
+
         # Create environment
         # Enforce joint-position control with scale=1.0
         import dataclasses as _dc
