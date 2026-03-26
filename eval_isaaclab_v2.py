@@ -87,6 +87,7 @@ class OnlineEval:
         self.include_prev_actions = include_prev_actions
         self.normalize = normalize
         self.apply_centering_offset = apply_centering_offset
+        self.debug_mode_freeze_robot = True # TODO: for debugging only.
 
         # Store flag for full observation un-scaling (IsaacLab -> GrandTour)
         # IsaacLab observations are scaled; GrandTour policy expects unscaled observations
@@ -273,8 +274,13 @@ class OnlineEval:
             
             # Convert actions from GrandTour format (absolute) to IsaacLab format (offsets)
             # IsaacLab expects: action = (target_pos - default_pos) / action_scale
-            actions_isaaclab = actions  # action_scale=1.0, no rescaling needed
 
+            if self.debug_mode_freeze_robot:
+                actions_isaaclab = obs[:, 12:24] 
+            else:
+                actions_isaaclab = actions  # action_scale=1.0, no rescaling needed
+
+            # simulation next step
             step_result = env.step(actions_isaaclab.detach())
 
             if len(step_result) == 5:
