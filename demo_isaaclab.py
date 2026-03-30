@@ -94,6 +94,8 @@ env_cfg = AnymalDFlatCameraEnvCfg()
 env_cfg.scene.num_envs = 1
 env = ManagerBasedRLEnv(cfg=env_cfg)
 
+cumulative_rewards = torch.zeros(env.num_envs, device=env.device)
+
 obs, info = env.reset()
 
 print(info)
@@ -101,8 +103,8 @@ print(info)
 # Create imgs directory if it doesn't exist
 os.makedirs("imgs", exist_ok=True)
 
-actions = torch.zeros_like(env.action_manager.action)
-obs, rew, terminated, truncated, info = env.step(actions)
+# actions = torch.zeros_like(env.action_manager.action)
+# obs, rew, terminated, truncated, info = env.step(actions)
 
 
 for i in range(100):
@@ -119,6 +121,7 @@ for i in range(100):
     # actions = obs["policy"][0][12:24]
     # actions = actions.reshape(1, -1)
     obs, rew, terminated, truncated, info = env.step(actions)
+    cumulative_rewards += rew
 
     # target_pos = 1.0 * torch.ones_like(env.scene["robot"].data.joint_pos)
     # target_vel = torch.zeros_like(env.scene["robot"].data.joint_vel)
@@ -175,6 +178,8 @@ for i in range(100):
 
 # Print the order of joints the robot asset uses
 print("Robot Joint Names:", env.scene["robot"].joint_names)
+
+print("Cumulative Rewards:", cumulative_rewards)
 
 # # Print the indices the Action Manager is controlling
 # print("Action Joint Indices:", env.action_manager._action_terms["joint_pos"].joint_ids)
