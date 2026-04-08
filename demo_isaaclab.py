@@ -30,6 +30,7 @@ from isaaclab_tasks.manager_based.locomotion.velocity.config.anymal_d.flat_env_c
     AnymalDFlatEnvCfg,
 )
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
 
 print("isaaclab path:", isaaclab.__file__)
 print("isaaclab version:", isaaclab.__version__)
@@ -50,18 +51,32 @@ z = zarr.open(f"./data/anymal_state_actuator/timestamp", mode="r")
 print(f"anymal_state_actuator timestamps shape:", z.shape) # shape is (nrows)
 grand_tour_actuator_timestamps = z[:]
 print(f"anymal_state_actuator timestamps:", grand_tour_actuator_timestamps[:10])
+print(f"timestamp min:", grand_tour_actuator_timestamps.min())
+print(f"timestamp max:", grand_tour_actuator_timestamps.max())
+print(f"timestamp duration:", grand_tour_actuator_timestamps.max() - grand_tour_actuator_timestamps.min())
+print("---")
 
 # for anymal_state_odometry
 z = zarr.open(f"./data/anymal_state_odometry/timestamp", mode="r")
 print(f"anymal_state_odometry timestamps shape:", z.shape) # shape is (nrows)
 grand_tour_odometry_timestamps = z[:]
 print(f"anymal_state_odometry timestamps:", grand_tour_odometry_timestamps[:10])
+print(f"timestamp min:", grand_tour_odometry_timestamps.min())
+print(f"timestamp max:", grand_tour_odometry_timestamps.max())
+print(f"timestamp duration:", grand_tour_odometry_timestamps.max() - grand_tour_odometry_timestamps.min())
+print("---")
 
 # for command twist
 z = zarr.open(f"./data/anymal_command_twist/timestamp", mode="r")
 print(f"anymal_command_twist timestamps shape:", z.shape) # shape is (nrows)
 grand_tour_command_timestamps = z[:]
 print(f"anymal_command_twist timestamps:", grand_tour_command_timestamps[:10])
+print(f"timestamp min:", grand_tour_command_timestamps.min())
+print(f"timestamp max:", grand_tour_command_timestamps.max())
+print(f"timestamp duration:", grand_tour_command_timestamps.max() - grand_tour_command_timestamps.min())
+print("---")
+# raise KeyboardInterrupt
+
 
 # load data
 
@@ -76,10 +91,14 @@ for key_idx, joint_name in zip(keys_, grand_tour_ref_keys_order):
     z = zarr.open(f"./data/anymal_state_actuator/{key_idx}_state_joint_position", mode="r")
     print(f"{joint_name} {key_idx}: joint_position shape:", z.shape) # shape is (nrows)
     grand_tour_dict_joint_positions[joint_name] = z[:]
+    print(f"sample joint position: {grand_tour_dict_joint_positions[joint_name][10000]}")
     
     z = zarr.open(f"./data/anymal_state_actuator/{key_idx}_state_joint_velocity", mode="r")
     print(f"{joint_name} {key_idx}: joint_velocity shape:", z.shape) # shape is (nrows)
     grand_tour_dict_joint_velocities[joint_name] = z[:]
+    print(f"sample joint velocity: {grand_tour_dict_joint_velocities[joint_name][10000]}")
+
+
 
 z = zarr.open(f"./data/anymal_state_odometry/twist_lin", mode="r")
 print(f"base_lin_vel shape:", z.shape) # shape is (nrows)
@@ -132,6 +151,19 @@ print("grand_tour_joint_positions shape:", grand_tour_joint_positions.shape)
 print("grand_tour_joint_velocities shape:", grand_tour_joint_velocities.shape)
 
 
+plt.plot(grand_tour_actuator_timestamps, grand_tour_dict_joint_positions[grand_tour_ref_keys_order[0]], label="actuator 0")
+plt.plot(grand_tour_actuator_timestamps, grand_tour_dict_joint_positions[grand_tour_ref_keys_order[1]], label="actuator 1")
+
+plt.plot(grand_tour_odometry_timestamps, grand_tour_linear_velocities.T[-1], label="odometry -1")
+
+plt.plot(grand_tour_command_timestamps, grand_tour_linear_velocity_commands.T[0], label="command 0")
+plt.plot(grand_tour_command_timestamps, grand_tour_linear_velocity_commands.T[1], label="command 1")
+plt.plot(grand_tour_command_timestamps, grand_tour_linear_velocity_commands.T[2], label="command 2")
+
+
+plt.legend()
+plt.savefig("joint_position.png")
+# raise KeyError
 
 
 # raise KeyboardInterrupt
@@ -188,13 +220,13 @@ print("grand_tour_joint_velocities shape:", grand_tour_joint_velocities.shape)
 # [24:36] joint_vel (loaded from state actuator)
 
 
-# naive implementation: interpolate all data to have total of 5000 points from start to end
-grand_tour_linear_velocities_interpolated = np.linspace(grand_tour_linear_velocities[0], grand_tour_linear_velocities[-1], 5000)
-grand_tour_angular_velocities_interpolated = np.linspace(grand_tour_angular_velocities[0], grand_tour_angular_velocities[-1], 5000)
-grand_tour_pose_orientation_xyz_interpolated = np.linspace(grand_tour_pose_orientation_xyz[0], grand_tour_pose_orientation_xyz[-1], 5000)
-grand_tour_linear_velocity_commands_interpolated = np.linspace(grand_tour_linear_velocity_commands[0], grand_tour_linear_velocity_commands[-1], 5000)
-grand_tour_joint_positions_interpolated = np.linspace(grand_tour_joint_positions[0], grand_tour_joint_positions[-1], 5000)
-grand_tour_joint_velocities_interpolated = np.linspace(grand_tour_joint_velocities[0], grand_tour_joint_velocities[-1], 5000)
+# naive implementation: interpolate all data to have total of 500000 points from start to end
+grand_tour_linear_velocities_interpolated = np.linspace(grand_tour_linear_velocities[0], grand_tour_linear_velocities[-1], 500000)
+grand_tour_angular_velocities_interpolated = np.linspace(grand_tour_angular_velocities[0], grand_tour_angular_velocities[-1], 500000)
+grand_tour_pose_orientation_xyz_interpolated = np.linspace(grand_tour_pose_orientation_xyz[0], grand_tour_pose_orientation_xyz[-1], 500000)
+grand_tour_linear_velocity_commands_interpolated = np.linspace(grand_tour_linear_velocity_commands[0], grand_tour_linear_velocity_commands[-1], 500000)
+grand_tour_joint_positions_interpolated = np.linspace(grand_tour_joint_positions[0], grand_tour_joint_positions[-1], 500000)
+grand_tour_joint_velocities_interpolated = np.linspace(grand_tour_joint_velocities[0], grand_tour_joint_velocities[-1], 500000)
 
 
 print(f"shape of interploated linear velocity: {grand_tour_linear_velocities_interpolated.shape}")
@@ -278,8 +310,9 @@ dataset = GrandTourDataset(X_data, Y_data)
 dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 if CLASSIFIER == "random_forest":
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X_data[2000:3000], Y_data[2000:3000])
+    model = LinearRegression()
+    model.fit(X_data[:], Y_data[:])
+    print("RMSE: ", np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:])**2)))
 else:
     model = DiffuseLocoModel().to(device)
 
@@ -454,6 +487,7 @@ os.makedirs("imgs", exist_ok=True)
 # cumulative reward -> tqdm pbar label dynamically
 for i in tqdm.trange(0,100, desc=f"Cumulative Reward: {cumulative_rewards[0].item()}"):
     actions = torch.zeros_like(env.action_manager.action)
+    # actions = torch.tensor(Y_data[2000:2001], device=env.device, dtype=torch.float32)
     # actions[:, 8] = 0.25  # set first joint to 1.0
     # actions[:, 9] = 0.25  # set second joint to 1.0
     # actions[:, 10] = 0.25 # set third joint to 1.0
@@ -463,11 +497,19 @@ for i in tqdm.trange(0,100, desc=f"Cumulative Reward: {cumulative_rewards[0].ite
     if CLASSIFIER == "random_forest":
         print(f"model: {model}")
         obs_first_36_features = obs["policy"][:, :36]
-        # actions = model.predict(obs_first_36_features.cpu().numpy())
-        # actions = torch.tensor(actions, device=env.device, dtype=torch.float32)
+        actions_pred = model.predict(obs_first_36_features.cpu().numpy())
+        actions_pred = torch.tensor(actions_pred, device=env.device, dtype=torch.float32)
+
+        # print(f"model prediction: {model.predict(X_data[2000:2001])}")
+        # print(f"Y_data: {Y_data[1000:1001]}")
+
+        # print(f"actions_pred: {actions_pred}")
+
+        actions = actions_pred
 
         # print(f"obs: {obs}")
         print(f"actions: {actions}")
+        print()
         
     else:
 
@@ -577,6 +619,9 @@ print("Robot Joint Names:", env.scene["robot"].joint_names)
 # Robot Joint Names: ['LF_HAA', 'LH_HAA', 'RF_HAA', 'RH_HAA', 'LF_HFE', 'LH_HFE', 'RF_HFE', 'RH_HFE', 'LF_KFE', 'LH_KFE', 'RF_KFE', 'RH_KFE']
 
 print("Cumulative Rewards:", cumulative_rewards)
+
+
+print(f"sample joint position: {grand_tour_joint_positions[10000]}")
 
 # # Print the indices the Action Manager is controlling
 # print("Action Joint Indices:", env.action_manager._action_terms["joint_pos"].joint_ids)
