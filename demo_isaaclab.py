@@ -104,11 +104,14 @@ print("Y_data shape:", Y_data.shape)
 
 # Simple DDPM Model Implementation
 class TransformerNoiseNet(nn.Module):
-    """Transformer-based noise prediction network"""
+    """Transformer-based noise prediction network for action trajectories"""
 
-    def __init__(self, input_dim, hidden_dim, action_dim, num_layers=4, num_heads=8):
+    def __init__(
+        self, input_dim, hidden_dim, action_dim, horizon=1, num_layers=4, num_heads=8
+    ):
         super().__init__()
         self.input_proj = nn.Linear(input_dim, hidden_dim)
+        self.horizon = horizon
 
         # Transformer encoder layers
         encoder_layer = nn.TransformerEncoderLayer(
@@ -124,11 +127,11 @@ class TransformerNoiseNet(nn.Module):
         self.output_proj = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, x):
-        # x shape: (batch, seq_len, input_dim) where seq_len=1
-        x = self.input_proj(x)  # (batch, seq_len, hidden_dim)
-        x = self.transformer(x)  # (batch, seq_len, hidden_dim)
-        x = self.output_proj(x)  # (batch, seq_len, action_dim)
-        return x.squeeze(1)  # (batch, action_dim)
+        # x shape: (batch, horizon, input_dim)
+        x = self.input_proj(x)  # (batch, horizon, hidden_dim)
+        x = self.transformer(x)  # (batch, horizon, hidden_dim)
+        x = self.output_proj(x)  # (batch, horizon, action_dim)
+        return x  # (batch, horizon, action_dim)
 
 
 class SimpleDDPM(nn.Module):
@@ -141,34 +144,45 @@ class SimpleDDPM(nn.Module):
         num_timesteps=100,
         use_transformer=False,
         num_heads=8,
+        horizon=16,
     ):
         super().__init__()
         self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.num_timesteps = num_timesteps
         self.use_transformer = use_transformer
+        self.horizon = horizon
 
-        # Time embedding - using sinusoidal embedding for single timesteps
+        # Time embedding - using sinusoidal embedding
         self.time_embed_dim = hidden_dim
 
         if use_transformer:
-            # Transformer-based network
+            # Transformer-based network - handles trajectory dimension
             self.network = TransformerNoiseNet(
                 input_dim=obs_dim + action_dim + hidden_dim,
                 hidden_dim=hidden_dim,
                 action_dim=action_dim,
+                horizon=horizon,
                 num_layers=num_layers,
                 num_heads=num_heads,
             )
         else:
-            # MLP network (original)
+            # Conv1d-based network for temporal sequences
+            # Input: (batch, horizon, obs_dim + action_dim + hidden_dim)
             layers = []
-            layers.append(nn.Linear(obs_dim + action_dim + hidden_dim, hidden_dim))
+            input_channels = obs_dim + action_dim + hidden_dim
+
+            # Stack of 1D convolutions to process trajectory
+            layers.append(
+                nn.Conv1d(input_channels, hidden_dim, kernel_size=3, padding=1)
+            )
             layers.append(nn.ReLU())
             for _ in range(num_layers - 1):
-                layers.append(nn.Linear(hidden_dim, hidden_dim))
+                layers.append(
+                    nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
+                )
                 layers.append(nn.ReLU())
-            layers.append(nn.Linear(hidden_dim, action_dim))
+            layers.append(nn.Conv1d(hidden_dim, action_dim, kernel_size=3, padding=1))
             self.network = nn.Sequential(*layers)
 
         # Noise schedule - register as buffers so they move to GPU with model
@@ -199,72 +213,91 @@ class SimpleDDPM(nn.Module):
         return emb
 
     def q_sample(self, x_start, t, noise=None):
+        """Add noise to action trajectory at timestep t.
+
+        Args:
+            x_start: (batch, horizon, action_dim) - clean action trajectory
+            t: (batch,) - diffusion timestep for each sample
+            noise: optional noise tensor
+        """
         if noise is None:
             noise = torch.randn_like(x_start)
 
-        sqrt_alpha_cumprod = torch.sqrt(self.alpha_cumprod[t])[:, None, None]
-        sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - self.alpha_cumprod[t])[
+        # Handle dimensions: t is (batch,), need to reshape for broadcasting
+        sqrt_alpha_cumprod = torch.sqrt(self.alpha_cumprod[t])  # (batch,)
+        sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - self.alpha_cumprod[t])  # (batch,)
+
+        # Reshape for broadcasting across horizon and action dims
+        sqrt_alpha_cumprod = sqrt_alpha_cumprod[:, None, None]  # (batch, 1, 1)
+        sqrt_one_minus_alpha_cumprod = sqrt_one_minus_alpha_cumprod[
             :, None, None
-        ]
+        ]  # (batch, 1, 1)
 
         return sqrt_alpha_cumprod * x_start + sqrt_one_minus_alpha_cumprod * noise
 
-    def p_mean_variance(self, x, t):
-        # Predict the mean and variance for the reverse process
-        pred_noise = self.network(x, t)
+    def forward(self, obs, action_traj, t):
+        """Forward pass for predicting noise in action trajectory.
 
-        alpha_t = self.alpha[t][:, None, None]
-        alpha_cumprod_t = self.alpha_cumprod[t][:, None, None]
-        beta_t = self.beta[t][:, None, None]
+        Args:
+            obs: (batch, obs_dim) - observation
+            action_traj: (batch, horizon, action_dim) - noisy action trajectory
+            t: (batch,) - diffusion timestep
 
-        # Compute mean
-        mean = (1 / torch.sqrt(alpha_t)) * (
-            x - (beta_t / torch.sqrt(1 - alpha_cumprod_t)) * pred_noise
-        )
+        Returns:
+            pred_noise: (batch, horizon, action_dim) - predicted noise
+        """
+        batch_size = obs.shape[0]
 
-        return mean
+        # Broadcast observation to match horizon
+        # obs: (batch, obs_dim) -> (batch, horizon, obs_dim)
+        obs_expanded = obs.unsqueeze(1).expand(-1, self.horizon, -1)
 
-    def forward(self, x, t):
-        # Concatenate observation and action
-        # x shape: (batch, seq_len, obs_dim + action_dim) for training
-        # For inference, x will be just observation
-        if x.shape[-1] == self.obs_dim:
-            # Inference mode - expand to match expected input
-            batch_size = x.shape[0]
-            dummy_action = torch.zeros(batch_size, 1, self.action_dim, device=x.device)
-            x_expanded = torch.cat(
-                [x.unsqueeze(1), dummy_action], dim=1
-            )  # (batch, 1, obs+action)
-        else:
-            # Training mode
-            x_expanded = x
+        # Concatenate obs and noisy action trajectory
+        combined = torch.cat(
+            [obs_expanded, action_traj], dim=-1
+        )  # (batch, horizon, obs_dim + action_dim)
 
-        # Get time embedding
-        t_embed = self.sinusoidal_time_embedding(t)
+        # Get time embedding and expand to horizon
+        t_embed = self.sinusoidal_time_embedding(t)  # (batch, time_embed_dim)
+        t_embed = t_embed.unsqueeze(1).expand(
+            -1, self.horizon, -1
+        )  # (batch, horizon, time_embed_dim)
 
-        # Concatenate time embedding with input
+        # Concatenate with combined input
         combined_input = torch.cat(
-            [x_expanded, t_embed.unsqueeze(1).expand(-1, x_expanded.shape[1], -1)],
-            dim=-1,
-        )
+            [combined, t_embed], dim=-1
+        )  # (batch, horizon, obs_dim + action_dim + time_embed_dim)
 
-        # Pass through network
         if self.use_transformer:
-            # Transformer expects (batch, seq_len, input_dim) and returns (batch, action_dim)
+            # Transformer returns (batch, horizon, action_dim)
             pred_noise = self.network(combined_input)
         else:
-            # MLP expects (batch, seq_len, input_dim) but returns (batch, seq_len, action_dim)
-            pred_noise = self.network(combined_input)
+            # Conv1d expects (batch, channels, length)
+            combined_input = combined_input.transpose(
+                1, 2
+            )  # (batch, input_dim, horizon)
+            pred_noise = self.network(combined_input)  # (batch, action_dim, horizon)
+            pred_noise = pred_noise.transpose(1, 2)  # (batch, horizon, action_dim)
 
         return pred_noise
 
     def sample(self, obs, num_inference_steps=20):
-        """Sample action from observation using DDPM"""
+        """Sample action trajectory from observation using DDPM.
+
+        Args:
+            obs: (batch, obs_dim) - observation
+            num_inference_steps: number of diffusion steps for inference
+
+        Returns:
+            action_trajectory: (batch, horizon, action_dim) - action trajectory
+        """
         batch_size = obs.shape[0]
         device = obs.device
 
-        # Start with pure noise
-        action = torch.randn(batch_size, 1, self.action_dim, device=device)
+        # Start with pure noise for entire trajectory
+        action_traj = torch.randn(
+            batch_size, self.horizon, self.action_dim, device=device
+        )
 
         # Use fewer timesteps for inference
         timesteps = torch.linspace(
@@ -278,46 +311,27 @@ class SimpleDDPM(nn.Module):
         for t in timesteps:
             t_batch = t.expand(batch_size)
 
-            # Predict noise - concatenate obs and action for network input
-            # obs: (batch, 36) -> (batch, 1, 36)
-            # action: (batch, 1, 12) -> (batch, 1, 12)
-            # combined: (batch, 1, 48) for network expecting obs_dim + action_dim
-            obs_expanded = obs.unsqueeze(1)  # (batch, 1, 36)
-            model_input = torch.cat([obs_expanded, action], dim=2)  # (batch, 1, 48)
-
-            # Get time embedding and concatenate with input
-            t_embed = self.sinusoidal_time_embedding(t_batch)  # (batch, hidden_dim)
-            combined_input = torch.cat(
-                [
-                    model_input,
-                    t_embed.unsqueeze(1).expand(-1, model_input.shape[1], -1),
-                ],
-                dim=-1,
-            )
-
             with torch.no_grad():
-                pred_noise = self.network(combined_input)
-                # Transformer returns (batch, action_dim), ensure 3D for broadcasting
-                if pred_noise.dim() == 2:
-                    pred_noise = pred_noise.unsqueeze(1)  # (batch, 1, action_dim)
+                # Predict noise for entire trajectory at once
+                pred_noise = self.forward(obs, action_traj, t_batch)
 
-            # Compute mean
+            # Compute mean for reverse process
             alpha_t = self.alpha[t_batch][:, None, None]
             alpha_cumprod_t = self.alpha_cumprod[t_batch][:, None, None]
             beta_t = self.beta[t_batch][:, None, None]
 
             mean = (1 / torch.sqrt(alpha_t)) * (
-                action - (beta_t / torch.sqrt(1 - alpha_cumprod_t)) * pred_noise
+                action_traj - (beta_t / torch.sqrt(1 - alpha_cumprod_t)) * pred_noise
             )
 
             # Add noise for all but final step
             if t > 0:
-                noise = torch.randn_like(action)
-                action = mean + torch.sqrt(beta_t) * noise
+                noise = torch.randn_like(action_traj)
+                action_traj = mean + torch.sqrt(beta_t) * noise
             else:
-                action = mean
+                action_traj = mean
 
-        return action.squeeze(1)  # Remove seq dimension
+        return action_traj  # (batch, horizon, action_dim)
 
 
 # CLASSIFIER = "linear_regression"
@@ -338,6 +352,7 @@ elif CLASSIFIER == "ddpm":
         num_timesteps=100,
         use_transformer=True,
         num_heads=8,
+        horizon=16,  # Plan 16 steps ahead
     ).to(device)
 else:
     model = DiffuseLocoModel().to(device)
@@ -370,20 +385,24 @@ else:
         if CLASSIFIER == "ddpm":
             for batch_obs, batch_action in train_loader:
                 batch_size = batch_obs.shape[0]
+                batch_obs = batch_obs.to(device)
+                batch_action = batch_action.to(device)
+
+                # Reshape action to trajectory format (batch, horizon, action_dim)
+                # If data is just single actions, tile them to create trajectory
+                # In practice, you'd want action sequences from your dataset
+                action_traj = batch_action.unsqueeze(1).expand(-1, model.horizon, -1)
 
                 # Sample random diffusion timestep
                 t = torch.randint(0, model.num_timesteps, (batch_size,), device=device)
 
-                # Add noise to actions
-                noise = torch.randn_like(batch_action)
-                noisy_action = model.q_sample(batch_action.unsqueeze(1), t, noise)
-
-                # Prepare input (concatenate obs and noisy action)
-                model_input = torch.cat([batch_obs.unsqueeze(1), noisy_action], dim=1)
+                # Add noise to trajectory
+                noise = torch.randn_like(action_traj)
+                noisy_action_traj = model.q_sample(action_traj, t, noise)
 
                 # Forward pass - predict noise
-                pred_noise = model.network(model_input, t)
-                loss = criterion(pred_noise, noise.unsqueeze(1))
+                pred_noise = model(batch_obs, noisy_action_traj, t)
+                loss = criterion(pred_noise, noise)
 
                 # Backward pass
                 optimizer.zero_grad()
@@ -502,6 +521,10 @@ print(info)
 # Create imgs directory if it doesn't exist
 os.makedirs("imgs", exist_ok=True)
 
+# Cache for action trajectory (for DDPM with horizon)
+action_trajectory_cache = None
+trajectory_step = 0
+
 # actions = torch.zeros_like(env.action_manager.action)
 # obs, rew, terminated, truncated, info = env.step(actions)
 
@@ -529,16 +552,26 @@ for i in tqdm.trange(
         print()
 
     elif CLASSIFIER == "ddpm":
-        print(f"model: {model}")
         obs_first_36_features = obs["policy"][:, :36]
 
-        # Use DDPM sampling for action prediction
-        with torch.no_grad():
-            actions_pred = model.sample(obs_first_36_features, num_inference_steps=10)
+        # Use cached trajectory or sample new one every `horizon` steps
+        if action_trajectory_cache is None or trajectory_step >= model.horizon:
+            if i % 50 == 0:
+                print(f"[Step {i}] Sampling new action trajectory...")
+            with torch.no_grad():
+                # Sample returns (batch, horizon, action_dim)
+                action_trajectory_cache = model.sample(
+                    obs_first_36_features, num_inference_steps=10
+                )
+            trajectory_step = 0
 
-        actions = actions_pred
-        print(f"actions: {actions}")
-        print()
+        # Extract current action from trajectory
+        actions = action_trajectory_cache[:, trajectory_step, :]  # (batch, action_dim)
+        trajectory_step += 1
+
+        if i % 50 == 0:
+            print(f"[Step {i}] Trajectory progress: {trajectory_step}/{model.horizon}")
+            print(f"  Action: {actions[0].cpu().numpy()}")
 
     else:
         # override all joints with the grand tour actions
