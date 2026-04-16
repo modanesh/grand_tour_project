@@ -165,7 +165,7 @@ class AnymalDFlatCameraEnvCfg(AnymalDFlatEnvCfg):
         self.scene.tiled_camera = TiledCameraCfg(
             prim_path="{ENV_REGEX_NS}/Camera",
             offset=TiledCameraCfg.OffsetCfg(
-                pos=(-7.0, 0.0, 3.0),
+                pos=(-12.0, 2.0, 3.0),
                 rot=(0.9945, 0.0, 0.1045, 0.0),
                 convention="world",
             ),
@@ -206,7 +206,7 @@ class AnymalDFlatCameraEnvCfg(AnymalDFlatEnvCfg):
 
 
 env_cfg = AnymalDFlatCameraEnvCfg()
-env_cfg.scene.num_envs = 1
+env_cfg.scene.num_envs = 8
 env = ManagerBasedRLEnv(cfg=env_cfg)
 
 cumulative_rewards = torch.zeros(env.num_envs, device=env.device)
