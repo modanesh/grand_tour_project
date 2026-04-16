@@ -45,10 +45,12 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--classifier", type=str, default="linear_regression")
 parser.add_argument("--force-x-unit", action="store_true", help="Force velocity command to [1, 0, 0]")
+parser.add_argument("--reference-tracking-mode", action="store_true", help="Replay recorded actions from LEICA-2 mission")
 args, _ = parser.parse_known_args()
 
 CLASSIFIER = args.classifier
 FORCE_X_UNIT = args.force_x_unit
+REFERENCE_TRACKING_MODE = args.reference_tracking_mode
 
 
 """
@@ -97,11 +99,21 @@ FORCE_X_UNIT = args.force_x_unit
 
 from src.dataloader import GrandTourDataloader
 
-dataloader = GrandTourDataloader()
-X_data = dataloader.get_observations_isaac_lab_format()
-Y_data = dataloader.get_actions_isaac_lab_format()
-print("X_data shape:", X_data.shape)
-print("Y_data shape:", Y_data.shape)
+# Load data based on mode
+if REFERENCE_TRACKING_MODE:
+    print("Loading LEICA-2 reference mission for tracking...")
+    dataloader = GrandTourDataloader(mission_name_short="LEICA-2")
+    reference_actions = dataloader.get_actions_isaac_lab_format(mission_name="LEICA-2")
+    reference_obs = dataloader.get_observations_isaac_lab_format(mission_name="LEICA-2")
+    print("Reference actions shape:", reference_actions.shape)
+    print("Reference observations shape:", reference_obs.shape)
+    print("Will replay", len(reference_actions), "action steps from LEICA-2")
+else:
+    dataloader = GrandTourDataloader()
+    X_data = dataloader.get_observations_isaac_lab_format()
+    Y_data = dataloader.get_actions_isaac_lab_format()
+    print("X_data shape:", X_data.shape)
+    print("Y_data shape:", Y_data.shape)
 
 
 # Simple DDPM Model Implementation
@@ -341,7 +353,12 @@ class SimpleDDPM(nn.Module):
 # Initialize device first
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if CLASSIFIER == "linear_regression":
+if REFERENCE_TRACKING_MODE:
+    model = None
+    optimizer = None
+    criterion = None
+    print("Reference tracking mode - no model needed")
+elif CLASSIFIER == "linear_regression":
     model = LinearRegression()
     model.fit(X_data[:], Y_data[:])
     print("RMSE: ", np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2)))
@@ -358,7 +375,9 @@ elif CLASSIFIER == "ddpm":
     ).to(device)
 else:
     model = DiffuseLocoModel().to(device)
-if CLASSIFIER == "linear_regression":
+if REFERENCE_TRACKING_MODE:
+    pass  # No training needed
+elif CLASSIFIER == "linear_regression":
     optimizer = None
     criterion = None
 elif CLASSIFIER == "ddpm":
@@ -368,7 +387,8 @@ elif CLASSIFIER == "ddpm":
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     criterion = nn.MSELoss()
 
-    # Training loop
+if not REFERENCE_TRACKING_MODE and CLASSIFIER not in ["linear_regression", "ddpm"]:
+    # Training loop (only for custom models, not linear_regression or ddpm)
     print(f"Starting {CLASSIFIER} training...")
     num_epochs = 50
     model.train()
@@ -437,27 +457,28 @@ elif CLASSIFIER == "ddpm":
         avg_loss = total_loss / len(train_loader)
         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {avg_loss:.6f}")
 
-    print(f"{CLASSIFIER} training completed!")
+    if not REFERENCE_TRACKING_MODE:
+        print(f"{CLASSIFIER} training completed!")
 
-    # Test trained model
-    model.eval()
-    with torch.no_grad():
-        test_obs = torch.FloatTensor(X_data[:5]).to(device)
+        # Test trained model
+        model.eval()
+        with torch.no_grad():
+            test_obs = torch.FloatTensor(X_data[:5]).to(device)
 
-        if CLASSIFIER == "ddpm":
-            # Use DDPM sampling
-            pred_joints = model.sample(test_obs, num_inference_steps=20)
-            print("DDPM sample predictions:", pred_joints.cpu().numpy())
-        else:
-            # Original testing
-            test_t = torch.zeros(5, device=device)
-            pred_joints = model(test_obs, test_t)
-            print("Sample predictions:", pred_joints.cpu().numpy())
+            if CLASSIFIER == "ddpm":
+                # Use DDPM sampling
+                pred_joints = model.sample(test_obs, num_inference_steps=20)
+                print("DDPM sample predictions:", pred_joints.cpu().numpy())
+            else:
+                # Original testing
+                test_t = torch.zeros(5, device=device)
+                pred_joints = model(test_obs, test_t)
+                print("Sample predictions:", pred_joints.cpu().numpy())
 
-    # Save trained model
-    model_name = f"{CLASSIFIER}_model.pth"
-    torch.save(model.state_dict(), model_name)
-    print(f"Model saved as '{model_name}'")
+        # Save trained model
+        model_name = f"{CLASSIFIER}_model.pth"
+        torch.save(model.state_dict(), model_name)
+        print(f"Model saved as '{model_name}'")
 
 
 # @configclass overrides the base class
@@ -566,7 +587,28 @@ for i in tqdm.trange(
     # actions[:, 10] = 0.25 # set third joint to 1.0
     # actions[:, 11] = 0.25  # set fourth joint to 1.0
 
-    if CLASSIFIER == "linear_regression":
+    if REFERENCE_TRACKING_MODE:
+        # Replay recorded actions from LEICA-2 mission
+        if i < len(reference_actions):
+            # Index into recorded actions
+            recorded_action = reference_actions[i]
+            actions = torch.tensor(
+                recorded_action, device=env.device, dtype=torch.float32
+            ).unsqueeze(0)  # Add batch dimension
+
+            if i % 100 == 0:
+                print(f"[Step {i}/{len(reference_actions)}] Replaying reference action: {recorded_action}")
+        else:
+            # Reached end of reference data, hold last action
+            recorded_action = reference_actions[-1]
+            actions = torch.tensor(
+                recorded_action, device=env.device, dtype=torch.float32
+            ).unsqueeze(0)
+            if i == len(reference_actions):
+                print(f"\n[Reference tracking complete] Reached end of LEICA-2 data at step {i}")
+                print(f"Total recorded steps: {len(reference_actions)}")
+
+    elif CLASSIFIER == "linear_regression":
         print(f"model: {model}")
         obs_first_36_features = process_observation(obs["policy"], force_x_unit=FORCE_X_UNIT)
         actions_pred = model.predict(obs_first_36_features.cpu().numpy())
