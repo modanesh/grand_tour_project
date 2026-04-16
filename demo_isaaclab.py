@@ -354,7 +354,7 @@ elif CLASSIFIER == "ddpm":
         num_timesteps=100,
         use_transformer=True,
         num_heads=8,
-        horizon=64,  # Plan 16 steps ahead
+        horizon=1,  # Plan 1 step ahead
     ).to(device)
 else:
     model = DiffuseLocoModel().to(device)
@@ -362,9 +362,9 @@ if CLASSIFIER == "linear_regression":
     optimizer = None
     criterion = None
 elif CLASSIFIER == "ddpm":
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    criterion = nn.MSELoss()
-else:
+#     optimizer = optim.Adam(model.parameters(), lr=1e-4)
+#     criterion = nn.MSELoss()
+# else:
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     criterion = nn.MSELoss()
 
