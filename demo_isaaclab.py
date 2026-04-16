@@ -352,7 +352,7 @@ elif CLASSIFIER == "ddpm":
         num_timesteps=100,
         use_transformer=True,
         num_heads=8,
-        horizon=16,  # Plan 16 steps ahead
+        horizon=64,  # Plan 16 steps ahead
     ).to(device)
 else:
     model = DiffuseLocoModel().to(device)
