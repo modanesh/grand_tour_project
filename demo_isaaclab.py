@@ -44,9 +44,11 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--classifier", type=str, default="linear_regression")
+parser.add_argument("--force-x-unit", action="store_true", help="Force velocity command to [1, 0, 0]")
 args, _ = parser.parse_known_args()
 
 CLASSIFIER = args.classifier
+FORCE_X_UNIT = args.force_x_unit
 
 
 """
@@ -521,6 +523,31 @@ print(info)
 # Create imgs directory if it doesn't exist
 os.makedirs("imgs", exist_ok=True)
 
+# Helper function to process observations
+def process_observation(obs_full, force_x_unit=False):
+    """Extract and optionally modify observation.
+
+    Args:
+        obs_full: (batch, 48) full observation
+        force_x_unit: if True, override velocity_commands to [1, 0, 0]
+
+    Returns:
+        obs_processed: (batch, 36) processed observation
+    """
+    obs_processed = obs_full[:, :36].clone()
+
+    if force_x_unit:
+        # velocity_commands are at indices 9:12
+        # Set to [1, 0, 0] for X-direction movement
+        obs_processed[:, 9:12] = torch.tensor(
+            [1.0, 0.0, 0.0],
+            device=obs_processed.device,
+            dtype=obs_processed.dtype
+        )
+
+    return obs_processed
+
+
 # Cache for action trajectory (for DDPM with horizon)
 action_trajectory_cache = None
 trajectory_step = 0
@@ -541,7 +568,7 @@ for i in tqdm.trange(
 
     if CLASSIFIER == "linear_regression":
         print(f"model: {model}")
-        obs_first_36_features = obs["policy"][:, :36]
+        obs_first_36_features = process_observation(obs["policy"], force_x_unit=FORCE_X_UNIT)
         actions_pred = model.predict(obs_first_36_features.cpu().numpy())
         actions_pred = torch.tensor(
             actions_pred, device=env.device, dtype=torch.float32
@@ -552,7 +579,7 @@ for i in tqdm.trange(
         print()
 
     elif CLASSIFIER == "ddpm":
-        obs_first_36_features = obs["policy"][:, :36]
+        obs_first_36_features = process_observation(obs["policy"], force_x_unit=FORCE_X_UNIT)
 
         # Use cached trajectory or sample new one every `horizon` steps
         if action_trajectory_cache is None or trajectory_step >= model.horizon:
