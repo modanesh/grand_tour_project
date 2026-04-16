@@ -46,124 +46,201 @@ CLASSIFIER = "random_forest"
 
 # load timestamps
 
-# for anymal_state_actuator
-z = zarr.open(f"./data/anymal_state_actuator/timestamp", mode="r")
-print(f"anymal_state_actuator timestamps shape:", z.shape) # shape is (nrows)
-grand_tour_actuator_timestamps = z[:]
-print(f"anymal_state_actuator timestamps:", grand_tour_actuator_timestamps[:10])
-print(f"timestamp min:", grand_tour_actuator_timestamps.min())
-print(f"timestamp max:", grand_tour_actuator_timestamps.max())
-print(f"timestamp duration:", grand_tour_actuator_timestamps.max() - grand_tour_actuator_timestamps.min())
-print("---")
+# # for anymal_state_actuator
+# z = zarr.open(f"./data/anymal_state_actuator/timestamp", mode="r")
+# print(f"anymal_state_actuator timestamps shape:", z.shape)  # shape is (nrows)
+# grand_tour_actuator_timestamps = z[:]
+# print(f"anymal_state_actuator timestamps:", grand_tour_actuator_timestamps[:10])
+# print(f"timestamp min:", grand_tour_actuator_timestamps.min())
+# print(f"timestamp max:", grand_tour_actuator_timestamps.max())
+# print(
+#     f"timestamp duration:",
+#     grand_tour_actuator_timestamps.max() - grand_tour_actuator_timestamps.min(),
+# )
+# print("---")
 
-# for anymal_state_odometry
-z = zarr.open(f"./data/anymal_state_odometry/timestamp", mode="r")
-print(f"anymal_state_odometry timestamps shape:", z.shape) # shape is (nrows)
-grand_tour_odometry_timestamps = z[:]
-print(f"anymal_state_odometry timestamps:", grand_tour_odometry_timestamps[:10])
-print(f"timestamp min:", grand_tour_odometry_timestamps.min())
-print(f"timestamp max:", grand_tour_odometry_timestamps.max())
-print(f"timestamp duration:", grand_tour_odometry_timestamps.max() - grand_tour_odometry_timestamps.min())
-print("---")
+# # for anymal_state_odometry
+# z = zarr.open(f"./data/anymal_state_odometry/timestamp", mode="r")
+# print(f"anymal_state_odometry timestamps shape:", z.shape)  # shape is (nrows)
+# grand_tour_odometry_timestamps = z[:]
+# print(f"anymal_state_odometry timestamps:", grand_tour_odometry_timestamps[:10])
+# print(f"timestamp min:", grand_tour_odometry_timestamps.min())
+# print(f"timestamp max:", grand_tour_odometry_timestamps.max())
+# print(
+#     f"timestamp duration:",
+#     grand_tour_odometry_timestamps.max() - grand_tour_odometry_timestamps.min(),
+# )
+# print("---")
 
-# for command twist
-z = zarr.open(f"./data/anymal_command_twist/timestamp", mode="r")
-print(f"anymal_command_twist timestamps shape:", z.shape) # shape is (nrows)
-grand_tour_command_timestamps = z[:]
-print(f"anymal_command_twist timestamps:", grand_tour_command_timestamps[:10])
-print(f"timestamp min:", grand_tour_command_timestamps.min())
-print(f"timestamp max:", grand_tour_command_timestamps.max())
-print(f"timestamp duration:", grand_tour_command_timestamps.max() - grand_tour_command_timestamps.min())
-print("---")
-# raise KeyboardInterrupt
-
-
-# load data
-
-grand_tour_ref_keys_order = ['LF_HAA', 'LF_HFE', 'LF_KFE', 'RF_HAA', 'RF_HFE', 'RF_KFE', 'LH_HAA', 'LH_HFE', 'LH_KFE', 'RH_HAA', 'RH_HFE', 'RH_KFE']
-grand_tour_dict_joint_positions = dict()
-grand_tour_dict_joint_velocities = dict()
-
-
-keys_ = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"]
-joint_positions_all = []
-for key_idx, joint_name in zip(keys_, grand_tour_ref_keys_order):
-    z = zarr.open(f"./data/anymal_state_actuator/{key_idx}_state_joint_position", mode="r")
-    print(f"{joint_name} {key_idx}: joint_position shape:", z.shape) # shape is (nrows)
-    grand_tour_dict_joint_positions[joint_name] = z[:]
-    print(f"sample joint position: {grand_tour_dict_joint_positions[joint_name][10000]}")
-    
-    z = zarr.open(f"./data/anymal_state_actuator/{key_idx}_state_joint_velocity", mode="r")
-    print(f"{joint_name} {key_idx}: joint_velocity shape:", z.shape) # shape is (nrows)
-    grand_tour_dict_joint_velocities[joint_name] = z[:]
-    print(f"sample joint velocity: {grand_tour_dict_joint_velocities[joint_name][10000]}")
+# # for command twist
+# z = zarr.open(f"./data/anymal_command_twist/timestamp", mode="r")
+# print(f"anymal_command_twist timestamps shape:", z.shape)  # shape is (nrows)
+# grand_tour_command_timestamps = z[:]
+# print(f"anymal_command_twist timestamps:", grand_tour_command_timestamps[:10])
+# print(f"timestamp min:", grand_tour_command_timestamps.min())
+# print(f"timestamp max:", grand_tour_command_timestamps.max())
+# print(
+#     f"timestamp duration:",
+#     grand_tour_command_timestamps.max() - grand_tour_command_timestamps.min(),
+# )
+# print("---")
+# # raise KeyboardInterrupt
 
 
+# # load data
 
-z = zarr.open(f"./data/anymal_state_odometry/twist_lin", mode="r")
-print(f"base_lin_vel shape:", z.shape) # shape is (nrows)
-grand_tour_linear_velocities = z[:]
-
-# load pose orientation from anymal state odometry
-z = zarr.open(f"./data/anymal_state_odometry/pose_orien", mode="r")
-print(f"pose_orientation shape:", z.shape) # shape is (nrows)
-grand_tour_pose_orientation = z[:]
-# convert quaternion to unit vector (xyz)
-print(f"check that the quaternion norm is 1:", np.linalg.norm(grand_tour_pose_orientation[0]))
-grand_tour_pose_orientation_xyz = grand_tour_pose_orientation[:, 1:] / np.linalg.norm(grand_tour_pose_orientation[:, 1:], axis=1, keepdims=True)
-print(f"pose_orientation unit vector shape:", grand_tour_pose_orientation_xyz.shape)
-print(f"check that the unit vector norm is 1:", np.linalg.norm(grand_tour_pose_orientation_xyz[0]))
-print(f"first sample pose orientation xyz:", grand_tour_pose_orientation_xyz[0])
-print(f"1000th sample pose orientation xyz:", grand_tour_pose_orientation_xyz[1000])
-
-
-z = zarr.open(f"./data/anymal_state_odometry/twist_ang", mode="r")
-print(f"base_ang_vel shape:", z.shape) # shape is (nrows)
-grand_tour_angular_velocities = z[:]
-
-z = zarr.open(f"./data/anymal_command_twist/linear", mode="r")
-print(f"linear_velocity_commands shape:", z.shape) # shape is (nrows)
-grand_tour_linear_velocity_commands = z[:]
+# grand_tour_ref_keys_order = [
+#     "LF_HAA",
+#     "LF_HFE",
+#     "LF_KFE",
+#     "RF_HAA",
+#     "RF_HFE",
+#     "RF_KFE",
+#     "LH_HAA",
+#     "LH_HFE",
+#     "LH_KFE",
+#     "RH_HAA",
+#     "RH_HFE",
+#     "RH_KFE",
+# ]
+# grand_tour_dict_joint_positions = dict()
+# grand_tour_dict_joint_velocities = dict()
 
 
+# keys_ = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"]
+# joint_positions_all = []
+# for key_idx, joint_name in zip(keys_, grand_tour_ref_keys_order):
+#     z = zarr.open(
+#         f"./data/anymal_state_actuator/{key_idx}_state_joint_position", mode="r"
+#     )
+#     print(f"{joint_name} {key_idx}: joint_position shape:", z.shape)  # shape is (nrows)
+#     grand_tour_dict_joint_positions[joint_name] = z[:]
+#     print(
+#         f"sample joint position: {grand_tour_dict_joint_positions[joint_name][10000]}"
+#     )
 
-isaac_lab_ref_keys_order = ['LF_HAA', 'LH_HAA', 'RF_HAA', 'RH_HAA', 'LF_HFE', 'LH_HFE', 'RF_HFE', 'RH_HFE', 'LF_KFE', 'LH_KFE', 'RF_KFE', 'RH_KFE']
-
-# concatenate as shape (12, nrows)
-grand_tour_joint_positions = np.zeros((12, len(grand_tour_dict_joint_positions[grand_tour_ref_keys_order[0]])))
-# concatenate in order of isaac lab order
-for i, joint_name in enumerate(isaac_lab_ref_keys_order):
-    grand_tour_joint_positions[i] = grand_tour_dict_joint_positions[joint_name]
-
-grand_tour_joint_velocities = np.zeros((12, len(grand_tour_dict_joint_velocities[grand_tour_ref_keys_order[0]])))
-# concatenate in order of isaac lab order
-for i, joint_name in enumerate(isaac_lab_ref_keys_order):
-    grand_tour_joint_velocities[i] = grand_tour_dict_joint_velocities[joint_name]
-
-non_translated_grand_tour_joint_positions = grand_tour_joint_positions.copy()
-
-grand_tour_joint_positions = grand_tour_joint_positions.T
-grand_tour_joint_velocities = grand_tour_joint_velocities.T
-
-print("grand_tour_angular_velocities shape:", grand_tour_angular_velocities.shape)
-print("grand_tour_linear_velocities shape:", grand_tour_linear_velocities.shape)
-print("grand_tour_joint_positions shape:", grand_tour_joint_positions.shape)
-print("grand_tour_joint_velocities shape:", grand_tour_joint_velocities.shape)
+#     z = zarr.open(
+#         f"./data/anymal_state_actuator/{key_idx}_state_joint_velocity", mode="r"
+#     )
+#     print(f"{joint_name} {key_idx}: joint_velocity shape:", z.shape)  # shape is (nrows)
+#     grand_tour_dict_joint_velocities[joint_name] = z[:]
+#     print(
+#         f"sample joint velocity: {grand_tour_dict_joint_velocities[joint_name][10000]}"
+#     )
 
 
-plt.plot(grand_tour_actuator_timestamps, grand_tour_dict_joint_positions[grand_tour_ref_keys_order[0]], label="actuator 0")
-plt.plot(grand_tour_actuator_timestamps, grand_tour_dict_joint_positions[grand_tour_ref_keys_order[1]], label="actuator 1")
+# z = zarr.open(f"./data/anymal_state_odometry/twist_lin", mode="r")
+# print(f"base_lin_vel shape:", z.shape)  # shape is (nrows)
+# grand_tour_linear_velocities = z[:]
 
-plt.plot(grand_tour_odometry_timestamps, grand_tour_linear_velocities.T[-1], label="odometry -1")
+# # load pose orientation from anymal state odometry
+# z = zarr.open(f"./data/anymal_state_odometry/pose_orien", mode="r")
+# print(f"pose_orientation shape:", z.shape)  # shape is (nrows)
+# grand_tour_pose_orientation = z[:]
+# # convert quaternion to unit vector (xyz)
+# print(
+#     f"check that the quaternion norm is 1:",
+#     np.linalg.norm(grand_tour_pose_orientation[0]),
+# )
+# grand_tour_pose_orientation_xyz = grand_tour_pose_orientation[:, 1:] / np.linalg.norm(
+#     grand_tour_pose_orientation[:, 1:], axis=1, keepdims=True
+# )
+# print(f"pose_orientation unit vector shape:", grand_tour_pose_orientation_xyz.shape)
+# print(
+#     f"check that the unit vector norm is 1:",
+#     np.linalg.norm(grand_tour_pose_orientation_xyz[0]),
+# )
+# print(f"first sample pose orientation xyz:", grand_tour_pose_orientation_xyz[0])
+# print(f"1000th sample pose orientation xyz:", grand_tour_pose_orientation_xyz[1000])
 
-plt.plot(grand_tour_command_timestamps, grand_tour_linear_velocity_commands.T[0], label="command 0")
-plt.plot(grand_tour_command_timestamps, grand_tour_linear_velocity_commands.T[1], label="command 1")
-plt.plot(grand_tour_command_timestamps, grand_tour_linear_velocity_commands.T[2], label="command 2")
+
+# z = zarr.open(f"./data/anymal_state_odometry/twist_ang", mode="r")
+# print(f"base_ang_vel shape:", z.shape)  # shape is (nrows)
+# grand_tour_angular_velocities = z[:]
+
+# z = zarr.open(f"./data/anymal_command_twist/linear", mode="r")
+# print(f"linear_velocity_commands shape:", z.shape)  # shape is (nrows)
+# grand_tour_linear_velocity_commands = z[:]
 
 
-plt.legend()
-plt.savefig("joint_position.png")
-# raise KeyError
+# isaac_lab_ref_keys_order = [
+#     "LF_HAA",
+#     "LH_HAA",
+#     "RF_HAA",
+#     "RH_HAA",
+#     "LF_HFE",
+#     "LH_HFE",
+#     "RF_HFE",
+#     "RH_HFE",
+#     "LF_KFE",
+#     "LH_KFE",
+#     "RF_KFE",
+#     "RH_KFE",
+# ]
+
+# # concatenate as shape (12, nrows)
+# grand_tour_joint_positions = np.zeros(
+#     (12, len(grand_tour_dict_joint_positions[grand_tour_ref_keys_order[0]]))
+# )
+# # concatenate in order of isaac lab order
+# for i, joint_name in enumerate(isaac_lab_ref_keys_order):
+#     grand_tour_joint_positions[i] = grand_tour_dict_joint_positions[joint_name]
+
+# grand_tour_joint_velocities = np.zeros(
+#     (12, len(grand_tour_dict_joint_velocities[grand_tour_ref_keys_order[0]]))
+# )
+# # concatenate in order of isaac lab order
+# for i, joint_name in enumerate(isaac_lab_ref_keys_order):
+#     grand_tour_joint_velocities[i] = grand_tour_dict_joint_velocities[joint_name]
+
+# non_translated_grand_tour_joint_positions = grand_tour_joint_positions.copy()
+
+# grand_tour_joint_positions = grand_tour_joint_positions.T
+# grand_tour_joint_velocities = grand_tour_joint_velocities.T
+
+# print("grand_tour_angular_velocities shape:", grand_tour_angular_velocities.shape)
+# print("grand_tour_linear_velocities shape:", grand_tour_linear_velocities.shape)
+# print("grand_tour_joint_positions shape:", grand_tour_joint_positions.shape)
+# print("grand_tour_joint_velocities shape:", grand_tour_joint_velocities.shape)
+
+
+# plt.plot(
+#     grand_tour_actuator_timestamps,
+#     grand_tour_dict_joint_positions[grand_tour_ref_keys_order[0]],
+#     label="actuator 0",
+# )
+# plt.plot(
+#     grand_tour_actuator_timestamps,
+#     grand_tour_dict_joint_positions[grand_tour_ref_keys_order[1]],
+#     label="actuator 1",
+# )
+
+# plt.plot(
+#     grand_tour_odometry_timestamps,
+#     grand_tour_linear_velocities.T[-1],
+#     label="odometry -1",
+# )
+
+# plt.plot(
+#     grand_tour_command_timestamps,
+#     grand_tour_linear_velocity_commands.T[0],
+#     label="command 0",
+# )
+# plt.plot(
+#     grand_tour_command_timestamps,
+#     grand_tour_linear_velocity_commands.T[1],
+#     label="command 1",
+# )
+# plt.plot(
+#     grand_tour_command_timestamps,
+#     grand_tour_linear_velocity_commands.T[2],
+#     label="command 2",
+# )
+
+
+# plt.legend()
+# plt.savefig("joint_position.png")
+# # raise KeyError
 
 
 # raise KeyboardInterrupt
@@ -221,104 +298,149 @@ plt.savefig("joint_position.png")
 
 
 # naive implementation: interpolate all data to have total of 500000 points from start to end
-grand_tour_linear_velocities_interpolated = np.linspace(grand_tour_linear_velocities[0], grand_tour_linear_velocities[-1], 500000)
-grand_tour_angular_velocities_interpolated = np.linspace(grand_tour_angular_velocities[0], grand_tour_angular_velocities[-1], 500000)
-grand_tour_pose_orientation_xyz_interpolated = np.linspace(grand_tour_pose_orientation_xyz[0], grand_tour_pose_orientation_xyz[-1], 500000)
-grand_tour_linear_velocity_commands_interpolated = np.linspace(grand_tour_linear_velocity_commands[0], grand_tour_linear_velocity_commands[-1], 500000)
-grand_tour_joint_positions_interpolated = np.linspace(grand_tour_joint_positions[0], grand_tour_joint_positions[-1], 500000)
-grand_tour_joint_velocities_interpolated = np.linspace(grand_tour_joint_velocities[0], grand_tour_joint_velocities[-1], 500000)
+# grand_tour_linear_velocities_interpolated = np.linspace(
+#     grand_tour_linear_velocities[0], grand_tour_linear_velocities[-1], 500000
+# )
+# grand_tour_angular_velocities_interpolated = np.linspace(
+#     grand_tour_angular_velocities[0], grand_tour_angular_velocities[-1], 500000
+# )
+# grand_tour_pose_orientation_xyz_interpolated = np.linspace(
+#     grand_tour_pose_orientation_xyz[0], grand_tour_pose_orientation_xyz[-1], 500000
+# )
+# grand_tour_linear_velocity_commands_interpolated = np.linspace(
+#     grand_tour_linear_velocity_commands[0],
+#     grand_tour_linear_velocity_commands[-1],
+#     500000,
+# )
+# grand_tour_joint_positions_interpolated = np.linspace(
+#     grand_tour_joint_positions[0], grand_tour_joint_positions[-1], 500000
+# )
+# grand_tour_joint_velocities_interpolated = np.linspace(
+#     grand_tour_joint_velocities[0], grand_tour_joint_velocities[-1], 500000
+# )
 
 
-print(f"shape of interploated linear velocity: {grand_tour_linear_velocities_interpolated.shape}")
-print(f"shape of interploated angular velocity: {grand_tour_angular_velocities_interpolated.shape}")
-print(f"shape of interploated pose orientation xyz: {grand_tour_pose_orientation_xyz_interpolated.shape}")
-print(f"shape of interploated linear velocity commands: {grand_tour_linear_velocity_commands_interpolated.shape}")
-print(f"shape of interploated joint positions: {grand_tour_joint_positions_interpolated.shape}")
-print(f"shape of interploated joint velocities: {grand_tour_joint_velocities_interpolated.shape}")
+# print(
+#     f"shape of interploated linear velocity: {grand_tour_linear_velocities_interpolated.shape}"
+# )
+# print(
+#     f"shape of interploated angular velocity: {grand_tour_angular_velocities_interpolated.shape}"
+# )
+# print(
+#     f"shape of interploated pose orientation xyz: {grand_tour_pose_orientation_xyz_interpolated.shape}"
+# )
+# print(
+#     f"shape of interploated linear velocity commands: {grand_tour_linear_velocity_commands_interpolated.shape}"
+# )
+# print(
+#     f"shape of interploated joint positions: {grand_tour_joint_positions_interpolated.shape}"
+# )
+# print(
+#     f"shape of interploated joint velocities: {grand_tour_joint_velocities_interpolated.shape}"
+# )
 
 
-raw_data = np.concatenate([
-    grand_tour_linear_velocities_interpolated,
-    grand_tour_angular_velocities_interpolated,
-    grand_tour_pose_orientation_xyz_interpolated,
-    grand_tour_linear_velocity_commands_interpolated,
-    grand_tour_joint_positions_interpolated,
-    grand_tour_joint_velocities_interpolated,
-], axis=1)
+# raw_data = np.concatenate(
+#     [
+#         grand_tour_linear_velocities_interpolated,
+#         grand_tour_angular_velocities_interpolated,
+#         grand_tour_pose_orientation_xyz_interpolated,
+#         grand_tour_linear_velocity_commands_interpolated,
+#         grand_tour_joint_positions_interpolated,
+#         grand_tour_joint_velocities_interpolated,
+#     ],
+#     axis=1,
+# )
 
-X_data = raw_data[:-1]
-Y_data = raw_data[1:, 12:24]  # Only predict next joint positions (12 dimensions)
+# X_data = raw_data[:-1]
+# Y_data = raw_data[1:, 12:24]  # Only predict next joint positions (12 dimensions)
 
+# print("X_data shape:", X_data.shape)
+# print("Y_data shape:", Y_data.shape)
+
+# # train diffuseloco on next joint prediction
+# import torch.nn as nn
+# import torch.optim as optim
+# from torch.utils.data import Dataset, DataLoader
+# import torch.nn.functional as F
+
+
+# class GrandTourDataset(Dataset):
+#     def __init__(self, observations, next_observations):
+#         self.observations = torch.FloatTensor(observations)
+#         self.next_observations = torch.FloatTensor(next_observations)
+
+#     def __len__(self):
+#         return len(self.observations)
+
+#     def __getitem__(self, idx):
+#         return self.observations[idx], self.next_observations[idx]
+
+
+# class DiffuseLocoModel(nn.Module):
+#     def __init__(self, input_dim=36, output_dim=12, hidden_dim=256):
+#         super().__init__()
+#         self.encoder = nn.Sequential(
+#             nn.Linear(input_dim, hidden_dim),
+#             nn.ReLU(),
+#             nn.Linear(hidden_dim, hidden_dim),
+#             nn.ReLU(),
+#             nn.Linear(hidden_dim, hidden_dim // 2),
+#             nn.ReLU(),
+#         )
+
+#         self.diffusion_steps = 100
+#         self.noise_scheduler = nn.ModuleList(
+#             [
+#                 nn.Linear(hidden_dim // 2 + 1, hidden_dim // 2 + 1)
+#                 for _ in range(self.diffusion_steps)
+#             ]
+#         )
+
+#         self.decoder = nn.Sequential(
+#             nn.Linear(hidden_dim // 2 + 1, hidden_dim),
+#             nn.ReLU(),
+#             nn.Linear(hidden_dim, hidden_dim),
+#             nn.ReLU(),
+#             nn.Linear(hidden_dim, output_dim),
+#         )
+
+#     def forward(self, x, t):
+#         encoded = self.encoder(x)
+#         t_embed = t.unsqueeze(-1).float()
+#         combined = torch.cat([encoded, t_embed], dim=-1)
+
+#         # Apply noise scheduler layers sequentially (simplified diffusion)
+#         for layer in self.noise_scheduler:
+#             combined = F.relu(layer(combined))
+
+#         return self.decoder(combined)
+
+# #### IGNORE ABOVE ###
+
+from src.dataloader import GrandTourDataloader
+
+dataloader = GrandTourDataloader()
+X_data = dataloader.get_observations_isaac_lab_format()
+Y_data = dataloader.get_actions_isaac_lab_format()
 print("X_data shape:", X_data.shape)
 print("Y_data shape:", Y_data.shape)
 
-# train diffuseloco on next joint prediction
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-import torch.nn.functional as F
 
-class GrandTourDataset(Dataset):
-    def __init__(self, observations, next_observations):
-        self.observations = torch.FloatTensor(observations)
-        self.next_observations = torch.FloatTensor(next_observations)
-    
-    def __len__(self):
-        return len(self.observations)
-    
-    def __getitem__(self, idx):
-        return self.observations[idx], self.next_observations[idx]
+CLASSIFIER = "linear_regression"
 
-class DiffuseLocoModel(nn.Module):
-    def __init__(self, input_dim=36, output_dim=12, hidden_dim=256):
-        super().__init__()
-        self.encoder = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim//2),
-            nn.ReLU()
-        )
-        
-        self.diffusion_steps = 100
-        self.noise_scheduler = nn.ModuleList([
-            nn.Linear(hidden_dim//2 + 1, hidden_dim//2 + 1) for _ in range(self.diffusion_steps)
-        ])
-        
-        self.decoder = nn.Sequential(
-            nn.Linear(hidden_dim//2 + 1, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, output_dim)
-        )
-    
-    def forward(self, x, t):
-        encoded = self.encoder(x)
-        t_embed = t.unsqueeze(-1).float()
-        combined = torch.cat([encoded, t_embed], dim=-1)
-        
-        # Apply noise scheduler layers sequentially (simplified diffusion)
-        for layer in self.noise_scheduler:
-            combined = F.relu(layer(combined))
-        
-        return self.decoder(combined)
-
-# Create dataset and dataloader
-dataset = GrandTourDataset(X_data, Y_data)
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-
-if CLASSIFIER == "random_forest":
+if CLASSIFIER == "linear_regression":
     model = LinearRegression()
     model.fit(X_data[:], Y_data[:])
-    print("RMSE: ", np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:])**2)))
+    print("RMSE: ", np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2)))
 else:
     model = DiffuseLocoModel().to(device)
 
+# raise KeyError
+
 # Initialize model
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-if CLASSIFIER == "random_forest":
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if CLASSIFIER == "linear_regression":
     optimizer = None
     criterion = None
 else:
@@ -335,23 +457,25 @@ else:
         for batch_obs, batch_next in dataloader:
             batch_obs = batch_obs.to(device)
             batch_next = batch_next.to(device)
-            
+
             # Sample random diffusion timestep
-            t = torch.randint(0, model.diffusion_steps, (batch_obs.shape[0],), device=device)
-            
+            t = torch.randint(
+                0, model.diffusion_steps, (batch_obs.shape[0],), device=device
+            )
+
             # Forward pass
             pred_next = model(batch_obs, t)
             loss = criterion(pred_next, batch_next)
-            
+
             # Backward pass
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            
+
             total_loss += loss.item()
-        
+
         avg_loss = total_loss / len(dataloader)
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_loss:.6f}")
+        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {avg_loss:.6f}")
 
     print("DiffuseLoco training completed!")
 
@@ -364,11 +488,8 @@ else:
         print("Sample predictions:", pred_joints.cpu().numpy())
 
     # Save the trained model
-    torch.save(model.state_dict(), 'diffuseloco_model.pth')
+    torch.save(model.state_dict(), "diffuseloco_model.pth")
     print("Model saved as 'diffuseloco_model.pth'")
-
-
-
 
 
 # print("joint_position dtype:", z.dtype)
@@ -411,6 +532,7 @@ else:
 # print("grand_tour_rewards shape:", grand_tour_rewards.shape)
 # print("grand_tour_terminals shape:", grand_tour_terminals.shape)
 
+
 # @configclass overrides the base class
 @configclass
 class AnymalDFlatCameraEnvCfg(AnymalDFlatEnvCfg):
@@ -440,16 +562,9 @@ class AnymalDFlatCameraEnvCfg(AnymalDFlatEnvCfg):
         self.viewer.eye = (7.0, 0.0, 3.0)
         self.viewer.lookat = (0.0, 0.0, 0.8)
 
-
         ########### OBSERVATION AND ACTION OVERRIDE #########
-        self.observations.policy.joint_pos = ObsTerm(
-            func=mdp.joint_pos,
-            scale=1.0
-        )
-        self.observations.policy.joint_vel = ObsTerm(
-            func=mdp.joint_vel,
-            scale=1.0
-        )
+        self.observations.policy.joint_pos = ObsTerm(func=mdp.joint_pos, scale=1.0)
+        self.observations.policy.joint_vel = ObsTerm(func=mdp.joint_vel, scale=1.0)
 
         # position control instead of torque/effort control
         self.actions.joint_pos = mdp.JointPositionActionCfg(
@@ -485,7 +600,7 @@ os.makedirs("imgs", exist_ok=True)
 # obs, rew, terminated, truncated, info = env.step(actions)
 
 # cumulative reward -> tqdm pbar label dynamically
-for i in tqdm.trange(0,100, desc=f"Cumulative Reward: {cumulative_rewards[0].item()}"):
+for i in tqdm.trange(0, 1000, desc=f"Cumulative Reward: {cumulative_rewards[0].item()}"):
     actions = torch.zeros_like(env.action_manager.action)
     # actions = torch.tensor(Y_data[2000:2001], device=env.device, dtype=torch.float32)
     # actions[:, 8] = 0.25  # set first joint to 1.0
@@ -493,12 +608,13 @@ for i in tqdm.trange(0,100, desc=f"Cumulative Reward: {cumulative_rewards[0].ite
     # actions[:, 10] = 0.25 # set third joint to 1.0
     # actions[:, 11] = 0.25  # set fourth joint to 1.0
 
-
-    if CLASSIFIER == "random_forest":
+    if CLASSIFIER == "linear_regression":
         print(f"model: {model}")
         obs_first_36_features = obs["policy"][:, :36]
         actions_pred = model.predict(obs_first_36_features.cpu().numpy())
-        actions_pred = torch.tensor(actions_pred, device=env.device, dtype=torch.float32)
+        actions_pred = torch.tensor(
+            actions_pred, device=env.device, dtype=torch.float32
+        )
 
         # print(f"model prediction: {model.predict(X_data[2000:2001])}")
         # print(f"Y_data: {Y_data[1000:1001]}")
@@ -510,9 +626,8 @@ for i in tqdm.trange(0,100, desc=f"Cumulative Reward: {cumulative_rewards[0].ite
         # print(f"obs: {obs}")
         print(f"actions: {actions}")
         print()
-        
-    else:
 
+    else:
         # override all joints with the grand tour actions
         curr_grand_tour_pos = non_translated_grand_tour_joint_positions[:, i]
         # run diffuseloco model inference obs -> model -> action
@@ -520,16 +635,18 @@ for i in tqdm.trange(0,100, desc=f"Cumulative Reward: {cumulative_rewards[0].ite
         curr_obs = curr_obs.to(device=device, dtype=torch.float32)
         # Only use first 36 dimensions (exclude prev_actions)
         curr_obs = curr_obs[:, :36]
-        curr_action = model(curr_obs, torch.tensor([0], device=device))
-        curr_grand_tour_pos = curr_action.detach().cpu().numpy()[0]
+        curr_action = model.predict(curr_obs.cpu().numpy())
+        curr_grand_tour_pos = curr_action[0]
 
-
-        actions[:, :] = torch.tensor(curr_grand_tour_pos, device=env.device, dtype=torch.float32)
-
+        actions[:, :] = torch.tensor(
+            curr_grand_tour_pos, device=env.device, dtype=torch.float32
+        )
 
         if i == 0:
             print(f"actions shape: {actions.shape}")
-            print(f"step {i}: rgb shape = {env.scene['tiled_camera'].data.output['rgb'].shape}")
+            print(
+                f"step {i}: rgb shape = {env.scene['tiled_camera'].data.output['rgb'].shape}"
+            )
 
     # actions = obs["policy"][0][12:24]
     # actions = actions.reshape(1, -1)
@@ -540,18 +657,16 @@ for i in tqdm.trange(0,100, desc=f"Cumulative Reward: {cumulative_rewards[0].ite
     # tqdm.write(f"Cumulative Reward: {cumulative_rewards[0].item()}")
     # target_pos = 1.0 * torch.ones_like(env.scene["robot"].data.joint_pos)
     # target_vel = torch.zeros_like(env.scene["robot"].data.joint_vel)
-    
 
     # # Teleport the joints to the target state
     # env.scene["robot"].write_joint_state_to_sim(target_pos, target_vel)
 
     # obs, rew, terminated, truncated, info = env.step(torch.zeros_like(env.action_manager.action))
 
-
     # pbar.set_description(f"Cumulative Reward: {cumulative_rewards[0].item()}")
     # pbar.refresh()  # Force update display
 
-    if i%1==0:
+    if i % 1 == 0:
         rgb = env.scene["tiled_camera"].data.output["rgb"]
 
         img = rgb[0].cpu().numpy()
@@ -607,21 +722,22 @@ for i in tqdm.trange(0,100, desc=f"Cumulative Reward: {cumulative_rewards[0].ite
 
 # make mp4 movie out of frames inline using cv2
 import cv2
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('demo_anymal_d_flat.mp4', fourcc, 30.0, (640, 480))
-for i in range(0, 100):
+
+fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+out = cv2.VideoWriter("demo_anymal_d_flat.mp4", fourcc, 30.0, (640, 480))
+for i in range(0, 1000):
     img = cv2.imread(f"imgs/demo_anymal_d_flat_{i}.png")
     out.write(img)
 out.release()
 
-# Print the order of joints the robot asset uses
-print("Robot Joint Names:", env.scene["robot"].joint_names)
-# Robot Joint Names: ['LF_HAA', 'LH_HAA', 'RF_HAA', 'RH_HAA', 'LF_HFE', 'LH_HFE', 'RF_HFE', 'RH_HFE', 'LF_KFE', 'LH_KFE', 'RF_KFE', 'RH_KFE']
+# # Print the order of joints the robot asset uses
+# print("Robot Joint Names:", env.scene["robot"].joint_names)
+# # Robot Joint Names: ['LF_HAA', 'LH_HAA', 'RF_HAA', 'RH_HAA', 'LF_HFE', 'LH_HFE', 'RF_HFE', 'RH_HFE', 'LF_KFE', 'LH_KFE', 'RF_KFE', 'RH_KFE']
 
 print("Cumulative Rewards:", cumulative_rewards)
 
 
-print(f"sample joint position: {grand_tour_joint_positions[10000]}")
+# print(f"sample joint position: {grand_tour_joint_positions[10000]}")
 
 # # Print the indices the Action Manager is controlling
 # print("Action Joint Indices:", env.action_manager._action_terms["joint_pos"].joint_ids)

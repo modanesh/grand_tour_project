@@ -1,0 +1,22 @@
+{
+    "ETH-1": {
+        "offset_start_unix_absolute": 1727775116.2766552,
+        "offset_end_unix_absolute": 1727775166.2766552
+    },
+    "LEICA-2": {
+        "offset_start_unix_absolute": 1732549048.140252,
+        "offset_end_unix_absolute": 1732549418.140252
+    },
+    "ARC-5": {
+        "offset_start_unix_absolute": 1731945659.479141,
+        "offset_end_unix_absolute": 1731945919.479141
+    },
+    "ARC-6": {
+        "offset_start_unix_absolute": 1731946489.6791315,
+        "offset_end_unix_absolute": 1731946754.6791315
+    },
+    "CON-2": {
+        "offset_start_unix_absolute": 1733733757.0729895,
+        "offset_end_unix_absolute": 1733733862.0729895
+    }
+}
