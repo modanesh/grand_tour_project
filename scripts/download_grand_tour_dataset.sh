@@ -16,9 +16,9 @@ download_mission() {
     # download state_odometry
     curl -L "https://huggingface.co/datasets/leggedrobotics/grand_tour_dataset/resolve/main/${timestamp}/data/anymal_state_odometry.tar" -o anymal_state_odometry.tar
     # tar -xvf and move to ./data/{MISSION_NAME}
-    tar -xvf anymal_command_twist.tar -C "${output_dir}"
-    tar -xvf anymal_state_actuator.tar -C "${output_dir}"
-    tar -xvf anymal_state_odometry.tar -C "${output_dir}"
+    tar -xf anymal_command_twist.tar -C "${output_dir}"
+    tar -xf anymal_state_actuator.tar -C "${output_dir}"
+    tar -xf anymal_state_odometry.tar -C "${output_dir}"
     # remove .tar files
     rm anymal_command_twist.tar
     rm anymal_state_actuator.tar
