@@ -6,7 +6,7 @@ import json
 
 
 class GrandTourDataloader:
-    def __init__(self, frequency: int = 10, mission_name_short: str = None):
+    def __init__(self, frequency: int = 100, mission_name_short: str = None):
         self.frequency = frequency  # number of samples per second
         self.mission_name_short = mission_name_short
 
@@ -156,7 +156,21 @@ class GrandTourDataloader:
             f"./data/{mission_name_short}/anymal_command_twist/linear", mode="r"
         )
         print(f"anymal_command_twist linear shape:", z.shape)  # shape is (nrows, 3)
-        mission_data["raw_velocity_commands"] = z[:]
+
+        # Copy to numpy array so we can modify it (zarr is read-only)
+        velocity_commands = z[:]  # Copy to numpy array
+
+        # the 3rd col is yaw from angular velocity commands
+        z_angular = zarr.open(
+            f"./data/{mission_name_short}/anymal_command_twist/angular", mode="r"
+        )
+        print(
+            f"anymal_command_twist angular shape:", z_angular.shape
+        )  # shape is (nrows, 3)
+
+        velocity_commands[:, 2] = z_angular[:, 2]
+
+        mission_data["raw_velocity_commands"] = velocity_commands
 
         # load timestamps from state actuator
         z = zarr.open(
@@ -164,6 +178,15 @@ class GrandTourDataloader:
         )
         print(f"anymal_state_actuator timestamps shape:", z.shape)  # shape is (nrows)
         mission_data["actuator_timestamps"] = z[:]
+
+        # load command fields from state actuator (stored as raw state)
+        mission_data["raw_command_mode"] = dict()
+        mission_data["raw_command_position"] = dict()
+        mission_data["raw_command_velocity"] = dict()
+        mission_data["raw_command_joint_torque"] = dict()
+        mission_data["raw_command_pid_gains_d"] = dict()
+        mission_data["raw_command_pid_gains_i"] = dict()
+        mission_data["raw_command_pid_gains_p"] = dict()
 
         grand_tour_ref_keys_order = [
             "LF_HAA",
@@ -196,6 +219,49 @@ class GrandTourDataloader:
             mission_data["raw_joint_vel"][joint_name] = z[:]
             print(f"{joint_name} {key_idx}: joint_velocity shape:", z.shape)
 
+            # load command fields from state actuator
+            z = zarr.open(
+                f"./data/{mission_name_short}/anymal_state_actuator/{key_idx}_command_mode",
+                mode="r",
+            )
+            mission_data["raw_command_mode"][joint_name] = z[:]
+
+            z = zarr.open(
+                f"./data/{mission_name_short}/anymal_state_actuator/{key_idx}_command_position",
+                mode="r",
+            )
+            mission_data["raw_command_position"][joint_name] = z[:]
+
+            z = zarr.open(
+                f"./data/{mission_name_short}/anymal_state_actuator/{key_idx}_command_velocity",
+                mode="r",
+            )
+            mission_data["raw_command_velocity"][joint_name] = z[:]
+
+            z = zarr.open(
+                f"./data/{mission_name_short}/anymal_state_actuator/{key_idx}_command_joint_torque",
+                mode="r",
+            )
+            mission_data["raw_command_joint_torque"][joint_name] = z[:]
+
+            z = zarr.open(
+                f"./data/{mission_name_short}/anymal_state_actuator/{key_idx}_command_pid_gains_d",
+                mode="r",
+            )
+            mission_data["raw_command_pid_gains_d"][joint_name] = z[:]
+
+            z = zarr.open(
+                f"./data/{mission_name_short}/anymal_state_actuator/{key_idx}_command_pid_gains_i",
+                mode="r",
+            )
+            mission_data["raw_command_pid_gains_i"][joint_name] = z[:]
+
+            z = zarr.open(
+                f"./data/{mission_name_short}/anymal_state_actuator/{key_idx}_command_pid_gains_p",
+                mode="r",
+            )
+            mission_data["raw_command_pid_gains_p"][joint_name] = z[:]
+
         # process data based on frequency and closest timestamps
         for i in range(
             int(
@@ -207,7 +273,7 @@ class GrandTourDataloader:
             )
         ):
             timestamp = mission_data["offset_start_unix_absolute"] + i / self.frequency
-            if i % 100 == 0:
+            if i % 10000 == 0:
                 print(f"timestamp: {timestamp}")
 
             # find closest timestamp for odometry
@@ -469,23 +535,31 @@ class GrandTourDataloader:
         else:
             raise ValueError("No data available. Load missions first.")
 
-    def get_actions_isaac_lab_format(self, mission_name: str = None):
+    def get_actions_isaac_lab_format(
+        self, mission_name: str = None, shift_by_one: bool = True
+    ):
         # Actions are typically joint positions or commands
-        # Return joint positions shifted by one timestep (idx 1 to n) for each mission
+        # Return joint positions, optionally shifted by one timestep
+        #
+        # Args:
+        #   shift_by_one: If True (default), returns actions[1:] for training (predict next action)
+        #                 If False, returns actions[0:] for reference tracking (replay exact actions)
 
         # Determine which data to use
         if mission_name:
             if mission_name not in self.missions_data:
                 raise ValueError(f"Mission '{mission_name}' not found")
             data = self.missions_data[mission_name]
-            # Return actions from idx 1 to n (exclude first timestep) for this mission
             joint_pos_array = np.column_stack(
                 [
                     data["adj_joint_pos"][joint_name]
                     for joint_name in self.isaac_lab_ref_keys_order
                 ]
             )
-            return joint_pos_array[1:]  # shifted by one timestep
+            if shift_by_one:
+                return joint_pos_array[1:]  # shifted by one timestep for training
+            else:
+                return joint_pos_array  # no shift for reference tracking
         elif self.combined_data is not None:
             # For combined data, return actions respecting mission boundaries
             all_actions = []
