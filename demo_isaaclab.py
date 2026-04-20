@@ -1,3 +1,45 @@
+"""
+Demo script for IsaacLab with ANYMAL robot featuring custom velocity controller configuration.
+
+Usage Examples:
+    # Default velocity controller
+    python demo_isaaclab.py
+
+    # Use custom velocity controller configuration
+    python demo_isaaclab.py --custom-velocity-cfg
+
+    # Use velocity presets
+    python demo_isaaclab.py --velocity-preset aggressive
+    python demo_isaaclab.py --velocity-preset conservative
+    python demo_isaaclab.py --velocity-preset exploration
+    python demo_isaaclab.py --velocity-preset precision
+    python demo_isaaclab.py --velocity-preset high_speed
+    python demo_isaaclab.py --velocity-preset forward_only_slow
+
+    # Modify velocity parameters programmatically:
+    # Add calls to update_velocity_config() before environment creation
+    # Example: update_velocity_config(lin_vel_x_range=(-3.0, 3.0))
+
+Available Velocity Presets:
+    - "default": Balanced movement (2.0 m/s max speed)
+    - "aggressive": Fast movements, quick changes (3.5 m/s max speed)
+    - "conservative": Slow, careful movements (1.0 m/s max speed)
+    - "exploration": Frequent direction changes, direct angular control (2.5 m/s max speed)
+    - "precision": Very slow, precise movements (0.5 m/s max speed)
+    - "high_speed": Maximum speed capabilities (4.0 m/s max speed)
+    - "forward_only_slow": Forward-only movement, very slow (0.8 m/s max speed)
+
+Custom Velocity Controller Parameters:
+    - lin_vel_x_range: Linear velocity X range (m/s)
+    - lin_vel_y_range: Linear velocity Y range (m/s)
+    - ang_vel_z_range: Angular velocity Z range (rad/s)
+    - heading_command: Use heading-based control (bool)
+    - heading_control_stiffness: Heading control stiffness
+    - resampling_time_range: Command resampling time range (s)
+    - rel_standing_envs: Probability of standing environments
+    - rel_heading_envs: Probability of heading-based control
+"""
+
 from isaaclab.app import AppLauncher
 from argparse import ArgumentParser
 import torch
@@ -88,6 +130,7 @@ from isaaclab.actuators import (
     ActuatorNetLSTMCfg,
     IdealPDActuatorCfg,
 )
+from isaaclab.envs.mdp import UniformVelocityCommandCfg
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 import torch.nn as nn
@@ -109,6 +152,90 @@ import zarr
 
 import argparse
 
+# Preset velocity controller configurations
+VELOCITY_PRESETS = {
+    "default": {
+        "lin_vel_x_range": (-2.0, 2.0),
+        "lin_vel_y_range": (-1.5, 1.5),
+        "ang_vel_z_range": (-1.5, 1.5),
+        "heading_command": True,
+        "heading_control_stiffness": 0.8,
+        "resampling_time_range": (8.0, 12.0),
+        "rel_standing_envs": 0.05,
+        "rel_heading_envs": 1.0,
+    },
+    "aggressive": {
+        "lin_vel_x_range": (-3.5, 3.5),
+        "lin_vel_y_range": (-2.5, 2.5),
+        "ang_vel_z_range": (-2.5, 2.5),
+        "heading_command": True,
+        "heading_control_stiffness": 1.2,
+        "resampling_time_range": (4.0, 8.0),
+        "rel_standing_envs": 0.02,
+        "rel_heading_envs": 0.9,
+    },
+    "conservative": {
+        "lin_vel_x_range": (-1.0, 1.0),
+        "lin_vel_y_range": (-0.8, 0.8),
+        "ang_vel_z_range": (-0.8, 0.8),
+        "heading_command": True,
+        "heading_control_stiffness": 0.5,
+        "resampling_time_range": (10.0, 15.0),
+        "rel_standing_envs": 0.1,
+        "rel_heading_envs": 1.0,
+    },
+    "exploration": {
+        "lin_vel_x_range": (-2.5, 2.5),
+        "lin_vel_y_range": (-2.0, 2.0),
+        "ang_vel_z_range": (-2.0, 2.0),
+        "heading_command": False,  # Direct angular velocity control
+        "heading_control_stiffness": 0.8,
+        "resampling_time_range": (3.0, 6.0),
+        "rel_standing_envs": 0.03,
+        "rel_heading_envs": 0.0,
+    },
+    "precision": {
+        "lin_vel_x_range": (-0.5, 0.5),
+        "lin_vel_y_range": (-0.4, 0.4),
+        "ang_vel_z_range": (-0.4, 0.4),
+        "heading_command": True,
+        "heading_control_stiffness": 1.5,
+        "resampling_time_range": (12.0, 18.0),
+        "rel_standing_envs": 0.15,
+        "rel_heading_envs": 1.0,
+    },
+    "high_speed": {
+        "lin_vel_x_range": (-4.0, 4.0),
+        "lin_vel_y_range": (-3.0, 3.0),
+        "ang_vel_z_range": (-3.0, 3.0),
+        "heading_command": True,
+        "heading_control_stiffness": 0.6,
+        "resampling_time_range": (2.0, 4.0),
+        "rel_standing_envs": 0.01,
+        "rel_heading_envs": 0.8,
+    },
+    "forward_only_slow": {
+        "lin_vel_x_range": (0.5, 0.55),  # Only forward motion, slow speed
+        "lin_vel_y_range": (0.0, 0.0),  # No lateral movement
+        "ang_vel_z_range": (0.0, 0.0),  # No turning
+        "heading_command": True,
+        "heading_control_stiffness": 1.0,
+        "resampling_time_range": (15.0, 20.0),  # Very infrequent changes
+        "rel_standing_envs": 0.0,  # No standing time
+        "rel_heading_envs": 1.0,
+    },
+    "reverse_only_slow": {
+        "lin_vel_x_range": (-0.55, -0.5),  # Only reverse motion, slow speed
+        "lin_vel_y_range": (0.0, 0.0),  # No lateral movement
+        "ang_vel_z_range": (0.0, 0.0),  # No turning
+        "heading_command": True,
+        "heading_control_stiffness": 1.0,
+        "resampling_time_range": (15.0, 20.0),  # Very infrequent changes
+        "rel_standing_envs": 0.0,  # No standing time
+        "rel_heading_envs": 1.0,
+    },
+}
+
 # Parse remaining args (classifier, etc.)
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--classifier", type=str, default="linear_regression")
@@ -120,11 +247,24 @@ parser.add_argument(
     action="store_true",
     help="Replay recorded actions from LEICA-2 mission",
 )
+parser.add_argument(
+    "--custom-velocity-cfg",
+    action="store_true",
+    help="Use custom velocity controller configuration",
+)
+parser.add_argument(
+    "--velocity-preset",
+    type=str,
+    choices=list(VELOCITY_PRESETS.keys()),
+    help="Velocity preset to use (overrides --custom-velocity-cfg)",
+)
 args, _ = parser.parse_known_args()
 
 CLASSIFIER = args.classifier
 FORCE_X_UNIT = args.force_x_unit
 REFERENCE_TRACKING_MODE = args.reference_tracking_mode
+CUSTOM_VELOCITY_CFG = args.custom_velocity_cfg
+VELOCITY_PRESET = args.velocity_preset
 
 # Initialize wandb after all config variables are defined
 if EXP_CONFIGS:
@@ -143,6 +283,8 @@ if EXP_CONFIGS:
             "enable_cameras": ENABLE_CAMERAS,
             "force_x_unit": FORCE_X_UNIT,
             "reference_tracking_mode": REFERENCE_TRACKING_MODE,
+            "custom_velocity_cfg": CUSTOM_VELOCITY_CFG,
+            "velocity_preset": VELOCITY_PRESET,
         },
         name=first_exp_name,
     )
@@ -158,6 +300,8 @@ else:
             "enable_cameras": ENABLE_CAMERAS,
             "force_x_unit": FORCE_X_UNIT,
             "reference_tracking_mode": REFERENCE_TRACKING_MODE,
+            "custom_velocity_cfg": CUSTOM_VELOCITY_CFG,
+            "velocity_preset": VELOCITY_PRESET,
         },
     )
 
@@ -166,6 +310,152 @@ ACTION_SCALE = 1.0
 ACTION_OFFSET = 0.0
 ACTUATOR_STIFFNESS = 100.0
 ACTUATOR_DAMPING = 6.0
+
+# Custom velocity controller configuration parameters
+VELOCITY_CONFIG = {
+    "lin_vel_x_range": (-2.0, 2.0),  # Linear velocity X range (m/s)
+    "lin_vel_y_range": (-1.5, 1.5),  # Linear velocity Y range (m/s)
+    "ang_vel_z_range": (-1.5, 1.5),  # Angular velocity Z range (rad/s)
+    "heading_command": True,  # Use heading-based control
+    "heading_control_stiffness": 0.8,  # Heading control stiffness
+    "resampling_time_range": (8.0, 12.0),  # Command resampling time range (s)
+    "rel_standing_envs": 0.05,  # Probability of standing environments
+    "rel_heading_envs": 1.0,  # Probability of heading-based control
+}
+
+
+def apply_velocity_preset(preset_name):
+    """Apply a preset velocity configuration.
+
+    Args:
+        preset_name: Name of the preset to apply
+
+    Available presets:
+        - "default": Balanced movement (current default)
+        - "aggressive": Fast movements, quick changes
+        - "conservative": Slow, careful movements
+        - "exploration": Frequent direction changes, direct angular control
+        - "precision": Very slow, precise movements
+        - "high_speed": Maximum speed, minimal standing
+        - "forward_only_slow": Forward-only movement, very slow with frequent standing
+    """
+    global VELOCITY_CONFIG
+
+    if preset_name not in VELOCITY_PRESETS:
+        print(f"Error: Unknown preset '{preset_name}'")
+        print(f"Available presets: {list(VELOCITY_PRESETS.keys())}")
+        return False
+
+    preset_config = VELOCITY_PRESETS[preset_name]
+    VELOCITY_CONFIG.update(preset_config)
+
+    print(f"Applied velocity preset: '{preset_name}'")
+    print("\nPreset Configuration:")
+    for key, value in preset_config.items():
+        print(f"  {key}: {value}")
+    print()
+    return True
+
+
+# Apply velocity preset if specified
+if VELOCITY_PRESET:
+    apply_velocity_preset(VELOCITY_PRESET)
+    CUSTOM_VELOCITY_CFG = True  # Enable custom velocity config when using preset
+    print(f"Using velocity preset: {VELOCITY_PRESET}")
+elif VELOCITY_PRESET is None and CUSTOM_VELOCITY_CFG:
+    print("Using custom velocity configuration (default parameters)")
+
+
+def list_velocity_presets():
+    """List all available velocity presets with descriptions."""
+    print("Available Velocity Presets:")
+    print("=" * 50)
+
+    descriptions = {
+        "default": "Balanced movement (default configuration)",
+        "aggressive": "Fast movements, quick direction changes, minimal standing",
+        "conservative": "Slow, careful movements with frequent standing",
+        "exploration": "Frequent direction changes, direct angular velocity control",
+        "precision": "Very slow, precise movements for delicate tasks",
+        "high_speed": "Maximum speed capabilities, minimal interruptions",
+        "forward_only_slow": "Forward-only movement, very slow with frequent standing",
+    }
+
+    for preset_name in VELOCITY_PRESETS.keys():
+        description = descriptions.get(preset_name, "No description available")
+        print(f"  '{preset_name}': {description}")
+        print(
+            f"    Speed: X={VELOCITY_PRESETS[preset_name]['lin_vel_x_range'][1]:.1f}m/s, "
+            f"Y={VELOCITY_PRESETS[preset_name]['lin_vel_y_range'][1]:.1f}m/s, "
+            f"Z={VELOCITY_PRESETS[preset_name]['ang_vel_z_range'][1]:.1f}rad/s"
+        )
+        print()
+
+
+def update_velocity_config(**kwargs):
+    """Update velocity configuration parameters.
+
+    Args:
+        **kwargs: Key-value pairs to update in VELOCITY_CONFIG
+
+    Example usage:
+        # For faster movement
+        update_velocity_config(
+            lin_vel_x_range=(-3.0, 3.0),
+            lin_vel_y_range=(-2.0, 2.0),
+            ang_vel_z_range=(-2.0, 2.0)
+        )
+
+        # For more aggressive heading control
+        update_velocity_config(
+            heading_control_stiffness=1.5,
+            rel_heading_envs=0.8
+        )
+
+        # For more frequent command changes
+        update_velocity_config(
+            resampling_time_range=(3.0, 5.0)
+        )
+
+        # Or use presets:
+        # apply_velocity_preset("aggressive")
+        # apply_velocity_preset("conservative")
+    """
+    global VELOCITY_CONFIG
+    for key, value in kwargs.items():
+        if key in VELOCITY_CONFIG:
+            VELOCITY_CONFIG[key] = value
+            print(f"Updated {key}: {value}")
+        else:
+            print(f"Warning: Unknown velocity config parameter: {key}")
+
+    # Print current configuration
+    print("\nCurrent Velocity Configuration:")
+    for key, value in VELOCITY_CONFIG.items():
+        print(f"  {key}: {value}")
+    print()
+
+
+# Custom velocity command configuration class
+@configclass
+class CustomCommandsCfg:
+    """Custom command specifications for the MDP with configurable velocity controller."""
+
+    base_velocity = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=VELOCITY_CONFIG["resampling_time_range"],
+        rel_standing_envs=VELOCITY_CONFIG["rel_standing_envs"],
+        rel_heading_envs=VELOCITY_CONFIG["rel_heading_envs"],
+        heading_command=VELOCITY_CONFIG["heading_command"],
+        heading_control_stiffness=VELOCITY_CONFIG["heading_control_stiffness"],
+        debug_vis=True,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=VELOCITY_CONFIG["lin_vel_x_range"],
+            lin_vel_y=VELOCITY_CONFIG["lin_vel_y_range"],
+            ang_vel_z=VELOCITY_CONFIG["ang_vel_z_range"],
+            heading=(-math.pi, math.pi),  # Full heading range
+        ),
+    )
 
 
 """
@@ -214,7 +504,7 @@ ACTUATOR_DAMPING = 6.0
 
 from src.dataloader import GrandTourDataloader
 from src.utils.cv2_utils import add_main_camera_text, add_front_camera_text
-from src.utils.model_utils import create_model, train_model
+from src.utils.model_utils import create_model, train_model, DiffusionTransformerPolicy
 from src.envs.anymal_env_cfg import AnymalDFlatCameraEnvCfg
 from lococheck import check_anymal_d_obs
 
@@ -266,19 +556,19 @@ else:
     REFERENCE_INITIAL_JOINT_POS = None
     if not EXP_CONFIGS:
         mission_list = [
-            "ARC-1",
-            "ARC-2",
-            "ARC-3",
-            "ARC-4",
-            "ARC-5",
-            "ARC-6",
-            "ARC-7",
+            #     "ARC-1",
+            #     "ARC-2",
+            #     "ARC-3",
+            #     "ARC-4",
+            #     "ARC-5",
+            #     "ARC-6",
+            #     "ARC-7",
             "LEICA-1",
-            "LEICA-2",
-            "CON-1",
-            "CON-2",
-            "CON-3",
-            "CON-4",
+            # "LEICA-2",
+            # "CON-1",
+            # "CON-2",
+            # "CON-3",
+            # "CON-4",
         ]
         dataloader = GrandTourDataloader(mission_names=mission_list, frequency=50)
         X_data = dataloader.get_observations_isaac_lab_format()
@@ -297,7 +587,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # Number of simulation steps
-num_inference_steps = 2500
+num_inference_steps = 1200
 
 
 def run_simulation_and_log(
@@ -586,18 +876,32 @@ else:
     print("Using flat environment")
 
 
-# Create environment
-env_cfg_creator = AnymalDFlatCameraEnvCfg(
-    env_type=ENV_TYPE,
-    enable_cameras=ENABLE_CAMERAS,
-    actuation_mode=ACTUATION_MODE,
-    action_scale=ACTION_SCALE,
-    action_offset=ACTION_OFFSET,
-    actuator_stiffness=ACTUATOR_STIFFNESS,
-    actuator_damping=ACTUATOR_DAMPING,
-)
+# Create environment with optional custom velocity controller configuration
+if CUSTOM_VELOCITY_CFG:
+    print("Using custom velocity controller configuration")
+    env_cfg_creator = AnymalDFlatCameraEnvCfg(
+        env_type=ENV_TYPE,
+        enable_cameras=ENABLE_CAMERAS,
+        actuation_mode=ACTUATION_MODE,
+        action_scale=ACTION_SCALE,
+        action_offset=ACTION_OFFSET,
+        actuator_stiffness=ACTUATOR_STIFFNESS,
+        actuator_damping=ACTUATOR_DAMPING,
+        custom_commands_cfg=CustomCommandsCfg(),
+    )
+else:
+    print("Using default velocity controller configuration")
+    env_cfg_creator = AnymalDFlatCameraEnvCfg(
+        env_type=ENV_TYPE,
+        enable_cameras=ENABLE_CAMERAS,
+        actuation_mode=ACTUATION_MODE,
+        action_scale=ACTION_SCALE,
+        action_offset=ACTION_OFFSET,
+        actuator_stiffness=ACTUATOR_STIFFNESS,
+        actuator_damping=ACTUATOR_DAMPING,
+    )
 env_cfg = env_cfg_creator.get_cfg()
-env_cfg.scene.num_envs = 8
+env_cfg.scene.num_envs = 64
 # Match Grand Tour data frequency (100Hz): decimation=2 * dt=0.005s = 0.01s = 100Hz
 # env_cfg.decimation = 2
 env = ManagerBasedRLEnv(cfg=env_cfg)
