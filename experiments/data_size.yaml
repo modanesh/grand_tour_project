@@ -1,0 +1,242 @@
+exp-1:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 1
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-2:
+  X_train_mission_list: ["ALB-1", "ARC-1",  "CON-1", "CYN-1", "EIG-2", "ETH-1", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LMB-1", "PIL-1","ROOT-1", "SBB-1", "SNOW-1", "SPX-1", "TRIM-1"]
+  n_epochs: 1
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-3:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "CON-1", "CON-2", "CON-3", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1",  "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "ROOT-1", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 1
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-4:
+  X_train_mission_list: ["ALB-1", "ETH-1", "LEE-1", "ROOT-1", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 1
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-5:
+  X_train_mission_list: ["LEICA-1"]
+  n_epochs: 1
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-6:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 5
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-7:
+  X_train_mission_list: ["ALB-1", "ARC-1",  "CON-1", "CYN-1", "EIG-2", "ETH-1", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LMB-1", "PIL-1","ROOT-1", "SBB-1", "SNOW-1", "SPX-1", "TRIM-1"]
+  n_epochs: 5
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-8:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "CON-1", "CON-2", "CON-3", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1",  "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "ROOT-1", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 5
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-9:
+  X_train_mission_list: ["ALB-1", "ETH-1", "LEE-1", "ROOT-1", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 5
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-10:
+  X_train_mission_list: ["LEICA-1"]
+  n_epochs: 5
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-11:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-12:
+  X_train_mission_list: ["ALB-1", "ARC-1",  "CON-1", "CYN-1", "EIG-2", "ETH-1", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LMB-1", "PIL-1","ROOT-1", "SBB-1", "SNOW-1", "SPX-1", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-13:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "CON-1", "CON-2", "CON-3", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1",  "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "ROOT-1", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-14:
+  X_train_mission_list: ["ALB-1", "ETH-1", "LEE-1", "ROOT-1", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-15:
+  X_train_mission_list: ["LEICA-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-16:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 20
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-17:
+  X_train_mission_list: ["ALB-1", "ARC-1",  "CON-1", "CYN-1", "EIG-2", "ETH-1", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LMB-1", "PIL-1","ROOT-1", "SBB-1", "SNOW-1", "SPX-1", "TRIM-1"]
+  n_epochs: 20
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-18:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "CON-1", "CON-2", "CON-3", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1",  "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "ROOT-1", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 20
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-19:
+  X_train_mission_list: ["ALB-1", "ETH-1", "LEE-1", "ROOT-1", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 20
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-20:
+  X_train_mission_list: ["LEICA-1"]
+  n_epochs: 20
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+# architectural depth changes
+exp-21:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 1
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-22:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 5
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-23:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-24:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 10
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-25:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 20
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+# architectural attn heads number changes
+exp-26:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 1
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-27:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 2
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-28:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 4
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-29:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+exp-30:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3", "ARC-1", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "CON-1", "CON-2", "CON-3", "CYN-1", "CYN-2", "EIG-2", "ETH-1", "ETH-2", "ETH-3", "GRI-1", "HAUS-1", "HEAP-1", "HIL-1", "HOB-1", "HOB-2", "ICE-1", "KAB-1", "KAB-2", "LEE-1", "LEICA-1", "LEICA-2", "LMB-1", "LMB-2", "PIL-1", "PIL-2", "ROOT-1", "SBB-1", "SBB-2", "SNOW-1", "SNOW-3", "SPX-1", "SPX-3", "TRIM-1"]
+  n_epochs: 10
+  n_attn_heads: 16
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
