@@ -87,8 +87,17 @@ if args.exp:
             EXP_CONFIGS = yaml.safe_load(f)
         print(f"Loaded {len(EXP_CONFIGS)} experiments from: {exp_file}")
         for exp_name, exp_cfg in EXP_CONFIGS.items():
+            velocity_info = ""
+            if "velocity_preset" in exp_cfg:
+                velocity_info = f", velocity={exp_cfg['velocity_preset']}"
+            elif "velocity_config" in exp_cfg:
+                velocity_info = f", velocity=custom"
+            simulation_steps = exp_cfg.get("num_simulation_steps", "default")
+            inference_steps = exp_cfg.get("num_inference_steps", "default")
             print(
-                f"  - {exp_name}: {exp_cfg.get('n_epochs', 'N/A')} epochs, {len(exp_cfg.get('X_train_mission_list', []))} missions"
+                f"  - {exp_name}: {exp_cfg.get('n_epochs', 'N/A')} epochs, "
+                f"{len(exp_cfg.get('X_train_mission_list', []))} missions"
+                f"{velocity_info}, sim_steps={simulation_steps}, infer_steps={inference_steps}"
             )
 
     else:
@@ -152,89 +161,18 @@ import zarr
 
 import argparse
 
-# Preset velocity controller configurations
-VELOCITY_PRESETS = {
-    "default": {
-        "lin_vel_x_range": (-2.0, 2.0),
-        "lin_vel_y_range": (-1.5, 1.5),
-        "ang_vel_z_range": (-1.5, 1.5),
-        "heading_command": True,
-        "heading_control_stiffness": 0.8,
-        "resampling_time_range": (8.0, 12.0),
-        "rel_standing_envs": 0.05,
-        "rel_heading_envs": 1.0,
-    },
-    "aggressive": {
-        "lin_vel_x_range": (-3.5, 3.5),
-        "lin_vel_y_range": (-2.5, 2.5),
-        "ang_vel_z_range": (-2.5, 2.5),
-        "heading_command": True,
-        "heading_control_stiffness": 1.2,
-        "resampling_time_range": (4.0, 8.0),
-        "rel_standing_envs": 0.02,
-        "rel_heading_envs": 0.9,
-    },
-    "conservative": {
-        "lin_vel_x_range": (-1.0, 1.0),
-        "lin_vel_y_range": (-0.8, 0.8),
-        "ang_vel_z_range": (-0.8, 0.8),
-        "heading_command": True,
-        "heading_control_stiffness": 0.5,
-        "resampling_time_range": (10.0, 15.0),
-        "rel_standing_envs": 0.1,
-        "rel_heading_envs": 1.0,
-    },
-    "exploration": {
-        "lin_vel_x_range": (-2.5, 2.5),
-        "lin_vel_y_range": (-2.0, 2.0),
-        "ang_vel_z_range": (-2.0, 2.0),
-        "heading_command": False,  # Direct angular velocity control
-        "heading_control_stiffness": 0.8,
-        "resampling_time_range": (3.0, 6.0),
-        "rel_standing_envs": 0.03,
-        "rel_heading_envs": 0.0,
-    },
-    "precision": {
-        "lin_vel_x_range": (-0.5, 0.5),
-        "lin_vel_y_range": (-0.4, 0.4),
-        "ang_vel_z_range": (-0.4, 0.4),
-        "heading_command": True,
-        "heading_control_stiffness": 1.5,
-        "resampling_time_range": (12.0, 18.0),
-        "rel_standing_envs": 0.15,
-        "rel_heading_envs": 1.0,
-    },
-    "high_speed": {
-        "lin_vel_x_range": (-4.0, 4.0),
-        "lin_vel_y_range": (-3.0, 3.0),
-        "ang_vel_z_range": (-3.0, 3.0),
-        "heading_command": True,
-        "heading_control_stiffness": 0.6,
-        "resampling_time_range": (2.0, 4.0),
-        "rel_standing_envs": 0.01,
-        "rel_heading_envs": 0.8,
-    },
-    "forward_only_slow": {
-        "lin_vel_x_range": (0.5, 0.55),  # Only forward motion, slow speed
-        "lin_vel_y_range": (0.0, 0.0),  # No lateral movement
-        "ang_vel_z_range": (0.0, 0.0),  # No turning
-        "heading_command": True,
-        "heading_control_stiffness": 1.0,
-        "resampling_time_range": (15.0, 20.0),  # Very infrequent changes
-        "rel_standing_envs": 0.0,  # No standing time
-        "rel_heading_envs": 1.0,
-    },
-    "reverse_only_slow": {
-        "lin_vel_x_range": (-0.55, -0.5),  # Only reverse motion, slow speed
-        "lin_vel_y_range": (0.0, 0.0),  # No lateral movement
-        "ang_vel_z_range": (0.0, 0.0),  # No turning
-        "heading_command": True,
-        "heading_control_stiffness": 1.0,
-        "resampling_time_range": (15.0, 20.0),  # Very infrequent changes
-        "rel_standing_envs": 0.0,  # No standing time
-        "rel_heading_envs": 1.0,
-    },
-}
+# Import velocity presets from src.commands.presets
+import sys
+import pathlib
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from src.commands.presets import (
+    VELOCITY_PRESETS,
+    VELOCITY_CONFIG,
+    apply_velocity_preset,
+    list_velocity_presets,
+    update_velocity_config,
+)
 
 # Parse remaining args (classifier, etc.)
 parser = argparse.ArgumentParser()
@@ -311,151 +249,38 @@ ACTION_OFFSET = 0.0
 ACTUATOR_STIFFNESS = 100.0
 ACTUATOR_DAMPING = 6.0
 
-# Custom velocity controller configuration parameters
-VELOCITY_CONFIG = {
-    "lin_vel_x_range": (-2.0, 2.0),  # Linear velocity X range (m/s)
-    "lin_vel_y_range": (-1.5, 1.5),  # Linear velocity Y range (m/s)
-    "ang_vel_z_range": (-1.5, 1.5),  # Angular velocity Z range (rad/s)
-    "heading_command": True,  # Use heading-based control
-    "heading_control_stiffness": 0.8,  # Heading control stiffness
-    "resampling_time_range": (8.0, 12.0),  # Command resampling time range (s)
-    "rel_standing_envs": 0.05,  # Probability of standing environments
-    "rel_heading_envs": 1.0,  # Probability of heading-based control
-}
+# Velocity presets are applied per-experiment in the experiment loop
+# This allows each experiment to have its own velocity configuration
 
 
-def apply_velocity_preset(preset_name):
-    """Apply a preset velocity configuration.
+def create_custom_commands_cfg():
+    """Create velocity command config with current VELOCITY_CONFIG values.
 
-    Args:
-        preset_name: Name of the preset to apply
-
-    Available presets:
-        - "default": Balanced movement (current default)
-        - "aggressive": Fast movements, quick changes
-        - "conservative": Slow, careful movements
-        - "exploration": Frequent direction changes, direct angular control
-        - "precision": Very slow, precise movements
-        - "high_speed": Maximum speed, minimal standing
-        - "forward_only_slow": Forward-only movement, very slow with frequent standing
+    This is a factory function that reads VELOCITY_CONFIG at call time,
+    ensuring velocity presets are applied correctly.
     """
-    global VELOCITY_CONFIG
 
-    if preset_name not in VELOCITY_PRESETS:
-        print(f"Error: Unknown preset '{preset_name}'")
-        print(f"Available presets: {list(VELOCITY_PRESETS.keys())}")
-        return False
+    @configclass
+    class CustomCommandsCfg:
+        """Custom command specifications for the MDP with configurable velocity controller."""
 
-    preset_config = VELOCITY_PRESETS[preset_name]
-    VELOCITY_CONFIG.update(preset_config)
-
-    print(f"Applied velocity preset: '{preset_name}'")
-    print("\nPreset Configuration:")
-    for key, value in preset_config.items():
-        print(f"  {key}: {value}")
-    print()
-    return True
-
-
-# Apply velocity preset if specified
-if VELOCITY_PRESET:
-    apply_velocity_preset(VELOCITY_PRESET)
-    CUSTOM_VELOCITY_CFG = True  # Enable custom velocity config when using preset
-    print(f"Using velocity preset: {VELOCITY_PRESET}")
-elif VELOCITY_PRESET is None and CUSTOM_VELOCITY_CFG:
-    print("Using custom velocity configuration (default parameters)")
-
-
-def list_velocity_presets():
-    """List all available velocity presets with descriptions."""
-    print("Available Velocity Presets:")
-    print("=" * 50)
-
-    descriptions = {
-        "default": "Balanced movement (default configuration)",
-        "aggressive": "Fast movements, quick direction changes, minimal standing",
-        "conservative": "Slow, careful movements with frequent standing",
-        "exploration": "Frequent direction changes, direct angular velocity control",
-        "precision": "Very slow, precise movements for delicate tasks",
-        "high_speed": "Maximum speed capabilities, minimal interruptions",
-        "forward_only_slow": "Forward-only movement, very slow with frequent standing",
-    }
-
-    for preset_name in VELOCITY_PRESETS.keys():
-        description = descriptions.get(preset_name, "No description available")
-        print(f"  '{preset_name}': {description}")
-        print(
-            f"    Speed: X={VELOCITY_PRESETS[preset_name]['lin_vel_x_range'][1]:.1f}m/s, "
-            f"Y={VELOCITY_PRESETS[preset_name]['lin_vel_y_range'][1]:.1f}m/s, "
-            f"Z={VELOCITY_PRESETS[preset_name]['ang_vel_z_range'][1]:.1f}rad/s"
-        )
-        print()
-
-
-def update_velocity_config(**kwargs):
-    """Update velocity configuration parameters.
-
-    Args:
-        **kwargs: Key-value pairs to update in VELOCITY_CONFIG
-
-    Example usage:
-        # For faster movement
-        update_velocity_config(
-            lin_vel_x_range=(-3.0, 3.0),
-            lin_vel_y_range=(-2.0, 2.0),
-            ang_vel_z_range=(-2.0, 2.0)
+        base_velocity = UniformVelocityCommandCfg(
+            asset_name="robot",
+            resampling_time_range=VELOCITY_CONFIG["resampling_time_range"],
+            rel_standing_envs=VELOCITY_CONFIG["rel_standing_envs"],
+            rel_heading_envs=VELOCITY_CONFIG["rel_heading_envs"],
+            heading_command=VELOCITY_CONFIG["heading_command"],
+            heading_control_stiffness=VELOCITY_CONFIG["heading_control_stiffness"],
+            debug_vis=True,
+            ranges=UniformVelocityCommandCfg.Ranges(
+                lin_vel_x=VELOCITY_CONFIG["lin_vel_x_range"],
+                lin_vel_y=VELOCITY_CONFIG["lin_vel_y_range"],
+                ang_vel_z=VELOCITY_CONFIG["ang_vel_z_range"],
+                heading=(-math.pi, math.pi),  # Full heading range
+            ),
         )
 
-        # For more aggressive heading control
-        update_velocity_config(
-            heading_control_stiffness=1.5,
-            rel_heading_envs=0.8
-        )
-
-        # For more frequent command changes
-        update_velocity_config(
-            resampling_time_range=(3.0, 5.0)
-        )
-
-        # Or use presets:
-        # apply_velocity_preset("aggressive")
-        # apply_velocity_preset("conservative")
-    """
-    global VELOCITY_CONFIG
-    for key, value in kwargs.items():
-        if key in VELOCITY_CONFIG:
-            VELOCITY_CONFIG[key] = value
-            print(f"Updated {key}: {value}")
-        else:
-            print(f"Warning: Unknown velocity config parameter: {key}")
-
-    # Print current configuration
-    print("\nCurrent Velocity Configuration:")
-    for key, value in VELOCITY_CONFIG.items():
-        print(f"  {key}: {value}")
-    print()
-
-
-# Custom velocity command configuration class
-@configclass
-class CustomCommandsCfg:
-    """Custom command specifications for the MDP with configurable velocity controller."""
-
-    base_velocity = UniformVelocityCommandCfg(
-        asset_name="robot",
-        resampling_time_range=VELOCITY_CONFIG["resampling_time_range"],
-        rel_standing_envs=VELOCITY_CONFIG["rel_standing_envs"],
-        rel_heading_envs=VELOCITY_CONFIG["rel_heading_envs"],
-        heading_command=VELOCITY_CONFIG["heading_command"],
-        heading_control_stiffness=VELOCITY_CONFIG["heading_control_stiffness"],
-        debug_vis=True,
-        ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=VELOCITY_CONFIG["lin_vel_x_range"],
-            lin_vel_y=VELOCITY_CONFIG["lin_vel_y_range"],
-            ang_vel_z=VELOCITY_CONFIG["ang_vel_z_range"],
-            heading=(-math.pi, math.pi),  # Full heading range
-        ),
-    )
+    return CustomCommandsCfg()
 
 
 """
@@ -505,6 +330,7 @@ class CustomCommandsCfg:
 from src.dataloader import GrandTourDataloader
 from src.utils.cv2_utils import add_main_camera_text, add_front_camera_text
 from src.utils.model_utils import create_model, train_model, DiffusionTransformerPolicy
+from src.utils.validation_utils import compute_rmse_validation
 from src.envs.anymal_env_cfg import AnymalDFlatCameraEnvCfg
 from lococheck import check_anymal_d_obs
 
@@ -589,7 +415,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Number of simulation steps
 # Recommended: 20-50 steps for real-time robot control
 # 1200 steps is too high for real-time applications
-num_inference_steps = 1200
+num_simulation_steps = 1200
+
+# Number of diffusion inference steps (only used for DDPM models)
+# More steps = better quality but slower
+num_inference_steps = 20
 
 
 def run_simulation_and_log(
@@ -617,7 +447,7 @@ def run_simulation_and_log(
         ACTION_OFFSET, \
         ENABLE_CAMERAS, \
         ACTUATION_MODE, \
-        num_inference_steps
+        num_simulation_steps
     global device, reference_actions
 
     # Reset environment for new run
@@ -666,7 +496,7 @@ def run_simulation_and_log(
     trajectory_step = 0
 
     # Simulation loop
-    for i in tqdm.trange(0, num_inference_steps, desc=f"Running {exp_name}"):
+    for i in tqdm.trange(0, num_simulation_steps, desc=f"Running {exp_name}"):
         actions = torch.zeros_like(env.action_manager.action)
 
         if REFERENCE_TRACKING_MODE:
@@ -683,6 +513,16 @@ def run_simulation_and_log(
                 ).unsqueeze(0)
 
         elif CLASSIFIER == "linear_regression":
+            obs_first_36_features = process_observation(
+                obs["policy"], force_x_unit=FORCE_X_UNIT
+            )
+            actions_pred = model.predict(obs_first_36_features.cpu().numpy())
+            actions_pred = torch.tensor(
+                actions_pred, device=env.device, dtype=torch.float32
+            )
+            actions = actions_pred
+
+        elif CLASSIFIER == "random_forest":
             obs_first_36_features = process_observation(
                 obs["policy"], force_x_unit=FORCE_X_UNIT
             )
@@ -790,7 +630,7 @@ def run_simulation_and_log(
     video_path = f"{exp_name}_demo.mp4"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(video_path, fourcc, 30.0, (640, 480))
-    for i in range(num_inference_steps):
+    for i in range(num_simulation_steps):
         img = cv2.imread(f"{exp_video_dir}/frame_{i}.png")
         if img is not None:
             out.write(img)
@@ -878,35 +718,52 @@ else:
     print("Using flat environment")
 
 
-# Create environment with optional custom velocity controller configuration
-if CUSTOM_VELOCITY_CFG:
-    print("Using custom velocity controller configuration")
-    env_cfg_creator = AnymalDFlatCameraEnvCfg(
-        env_type=ENV_TYPE,
-        enable_cameras=ENABLE_CAMERAS,
-        actuation_mode=ACTUATION_MODE,
-        action_scale=ACTION_SCALE,
-        action_offset=ACTION_OFFSET,
-        actuator_stiffness=ACTUATOR_STIFFNESS,
-        actuator_damping=ACTUATOR_DAMPING,
-        custom_commands_cfg=CustomCommandsCfg(),
-    )
-else:
-    print("Using default velocity controller configuration")
-    env_cfg_creator = AnymalDFlatCameraEnvCfg(
-        env_type=ENV_TYPE,
-        enable_cameras=ENABLE_CAMERAS,
-        actuation_mode=ACTUATION_MODE,
-        action_scale=ACTION_SCALE,
-        action_offset=ACTION_OFFSET,
-        actuator_stiffness=ACTUATOR_STIFFNESS,
-        actuator_damping=ACTUATOR_DAMPING,
-    )
-env_cfg = env_cfg_creator.get_cfg()
-env_cfg.scene.num_envs = 64
-# Match Grand Tour data frequency (100Hz): decimation=2 * dt=0.005s = 0.01s = 100Hz
-# env_cfg.decimation = 2
-env = ManagerBasedRLEnv(cfg=env_cfg)
+def create_environment():
+    """Create environment with current VELOCITY_CONFIG values."""
+    global env, env_cfg
+    try:
+        if CUSTOM_VELOCITY_CFG:
+            print("Using custom velocity controller configuration")
+            print(f"  VELOCITY_CONFIG: {VELOCITY_CONFIG}")
+            env_cfg_creator = AnymalDFlatCameraEnvCfg(
+                env_type=ENV_TYPE,
+                enable_cameras=ENABLE_CAMERAS,
+                actuation_mode=ACTUATION_MODE,
+                action_scale=ACTION_SCALE,
+                action_offset=ACTION_OFFSET,
+                actuator_stiffness=ACTUATOR_STIFFNESS,
+                actuator_damping=ACTUATOR_DAMPING,
+                custom_commands_cfg=create_custom_commands_cfg(),
+            )
+        else:
+            print("Using default velocity controller configuration")
+            env_cfg_creator = AnymalDFlatCameraEnvCfg(
+                env_type=ENV_TYPE,
+                enable_cameras=ENABLE_CAMERAS,
+                actuation_mode=ACTUATION_MODE,
+                action_scale=ACTION_SCALE,
+                action_offset=ACTION_OFFSET,
+                actuator_stiffness=ACTUATOR_STIFFNESS,
+                actuator_damping=ACTUATOR_DAMPING,
+            )
+        print("  Getting config...")
+        env_cfg = env_cfg_creator.get_cfg()
+        env_cfg.scene.num_envs = 64
+        print("  Creating ManagerBasedRLEnv...")
+        env = ManagerBasedRLEnv(cfg=env_cfg)
+        print("  Environment created successfully!")
+        return env
+    except Exception as e:
+        print(f"ERROR creating environment: {e}")
+        import traceback
+
+        traceback.print_exc()
+        raise
+
+
+# Environment will be created lazily for the first experiment
+env = None
+env_cfg = None
 
 # Create imgs directory if it doesn't exist
 os.makedirs("imgs", exist_ok=True)
@@ -944,6 +801,48 @@ if EXP_CONFIGS and not REFERENCE_TRACKING_MODE:
         print(f"Running experiment: {exp_name}")
         print(f"{'=' * 60}")
 
+        # Apply experiment-specific velocity config if specified
+        velocity_config_changed = False
+        if "velocity_preset" in exp_config:
+            preset_name = exp_config["velocity_preset"]
+            if preset_name in VELOCITY_PRESETS:
+                apply_velocity_preset(preset_name)
+                CUSTOM_VELOCITY_CFG = True
+                velocity_config_changed = True
+                print(f"  Applied velocity preset: {preset_name}")
+            else:
+                print(f"  Warning: Unknown velocity preset '{preset_name}'")
+        elif "velocity_config" in exp_config:
+            custom_cfg = exp_config["velocity_config"]
+            update_velocity_config(**custom_cfg)
+            CUSTOM_VELOCITY_CFG = True
+            velocity_config_changed = True
+            print(f"  Applied custom velocity config")
+
+        # Create environment on first experiment with current velocity config
+        if env is None:
+            print(
+                f"  Creating environment for first experiment with velocity preset..."
+            )
+            env = create_environment()
+        elif velocity_config_changed:
+            print(f"  WARNING: Velocity preset changed but env already created.")
+            print(
+                f"  Subsequent experiments will use the first experiment's velocity preset."
+            )
+
+        # Apply experiment-specific config for simulation and inference steps
+        exp_num_simulation_steps = exp_config.get(
+            "num_simulation_steps", num_simulation_steps
+        )
+        if exp_num_simulation_steps != num_simulation_steps:
+            print(f"  Using num_simulation_steps: {exp_num_simulation_steps}")
+        exp_num_inference_steps = exp_config.get(
+            "num_inference_steps", num_inference_steps
+        )
+        if exp_num_inference_steps != num_inference_steps:
+            print(f"  Using num_inference_steps: {exp_num_inference_steps}")
+
         # Load data for this experiment
         X_data, Y_data, _, _, _ = load_data_for_experiment(
             exp_config, reference_tracking_mode=False
@@ -957,13 +856,54 @@ if EXP_CONFIGS and not REFERENCE_TRACKING_MODE:
         model, optimizer, criterion, training_stats = train_model(
             X_data, Y_data, model, exp_config, exp_name, CLASSIFIER, device
         )
+
+        # Compute train RMSE after training
+        if CLASSIFIER == "linear_regression":
+            train_rmse = np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2))
+        elif CLASSIFIER == "random_forest":
+            train_rmse = np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2))
+            print(f"Train RMSE: {train_rmse:.6f}")
+        elif CLASSIFIER == "ddpm":
+            model.eval()
+            with torch.no_grad():
+                X_tensor_full = torch.FloatTensor(X_data).to(device)
+                Y_tensor_full = torch.FloatTensor(Y_data).to(device)
+                train_pred_traj = model.sample(X_tensor_full, num_inference_steps=20)
+                train_rmse = torch.sqrt(
+                    torch.mean((train_pred_traj[:, 0, :] - Y_tensor_full) ** 2)
+                ).item()
+            print(f"Train RMSE: {train_rmse:.6f}")
+        else:
+            train_rmse = None
+
+        # Run RMSE validation on held-out missions
+        val_stats = compute_rmse_validation(
+            model,
+            CLASSIFIER,
+            device,
+            split_json_path="data/split.json",
+            frequency=50,
+            train_rmse=train_rmse,
+        )
+        training_stats.update(val_stats)
+
         trained_models[exp_name] = model
 
         # Run simulation and log to wandb
         print(f"\nRunning simulation for {exp_name}...")
+        # Temporarily override steps for this experiment
+        original_num_simulation_steps = num_simulation_steps
+        original_num_inference_steps = num_inference_steps
+        if "num_simulation_steps" in exp_config:
+            num_simulation_steps = exp_config["num_simulation_steps"]
+        if "num_inference_steps" in exp_config:
+            num_inference_steps = exp_config["num_inference_steps"]
         run_simulation_and_log(
             model, exp_name, exp_config, training_stats=training_stats, run_wandb=True
         )
+        # Restore original steps
+        num_simulation_steps = original_num_simulation_steps
+        num_inference_steps = original_num_inference_steps
 
     print(f"\n{'=' * 60}")
     print(f"All {len(EXP_CONFIGS)} experiments completed!")
@@ -984,9 +924,24 @@ elif REFERENCE_TRACKING_MODE:
 elif CLASSIFIER == "linear_regression":
     model = LinearRegression()
     model.fit(X_data[:], Y_data[:])
-    print("RMSE: ", np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2)))
+    train_rmse = np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2))
+    print("Train RMSE: ", train_rmse)
     optimizer = None
     criterion = None
+
+    # Run RMSE validation on held-out missions
+    val_stats = compute_rmse_validation(
+        model,
+        CLASSIFIER,
+        device,
+        split_json_path="data/split.json",
+        frequency=50,
+        train_rmse=train_rmse,
+    )
+
+    # Log validation stats to wandb
+    if wandb.run is not None:
+        wandb.log(val_stats)
 
 elif CLASSIFIER == "ddpm" and not experiments_completed:
     model = DiffusionTransformerPolicy(
@@ -1033,10 +988,37 @@ elif CLASSIFIER == "ddpm" and not experiments_completed:
 
     print(f"{CLASSIFIER} training completed!")
     model.eval()
+
+    # Compute train RMSE on full dataset
+    with torch.no_grad():
+        X_tensor_full = torch.FloatTensor(X_data).to(device)
+        Y_tensor_full = torch.FloatTensor(Y_data).to(device)
+        train_action_traj = Y_tensor_full.unsqueeze(1).expand(-1, model.horizon, -1)
+        train_pred_traj = model.sample(X_tensor_full, num_inference_steps=20)
+        train_rmse = torch.sqrt(
+            torch.mean((train_pred_traj[:, 0, :] - Y_tensor_full) ** 2)
+        ).item()
+        print(f"Train RMSE: {train_rmse:.6f}")
+
     with torch.no_grad():
         test_obs = torch.FloatTensor(X_data[:5]).to(device)
         pred_joints = model.sample(test_obs, num_inference_steps=25)
         print("DDPM sample predictions:", pred_joints.cpu().numpy())
+
+    # Run RMSE validation on held-out missions
+    val_stats = compute_rmse_validation(
+        model,
+        CLASSIFIER,
+        device,
+        split_json_path="data/split.json",
+        frequency=50,
+        train_rmse=train_rmse,
+    )
+
+    # Log validation stats to wandb
+    if wandb.run is not None:
+        wandb.log(val_stats)
+
     model_name = f"{CLASSIFIER}_model.pth"
     torch.save(model.state_dict(), model_name)
     print(f"Model saved as '{model_name}'")
@@ -1045,6 +1027,16 @@ elif not experiments_completed:
     model = DiffuseLocoModel().to(device)
     optimizer = None
     criterion = None
+
+    # Run RMSE validation on held-out missions
+    val_stats = compute_rmse_validation(
+        model, CLASSIFIER, device, split_json_path="data/split.json", frequency=50
+    )
+
+    # Log validation stats to wandb
+    if wandb.run is not None:
+        wandb.log(val_stats)
+
 else:
     # Model already set from experiments
     pass

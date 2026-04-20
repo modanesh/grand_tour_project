@@ -398,6 +398,19 @@ def train_model(X_data, Y_data, model, exp_config, exp_name, classifier, device)
         print("RMSE: ", np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2)))
         return model, None, None, {}
 
+    if classifier == "random_forest":
+        print(f"Training Random Forest with {model.n_estimators} estimators...")
+        model.fit(X_data[:], Y_data[:])
+        train_rmse = np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2))
+        print(f"Train RMSE: {train_rmse:.6f}")
+        # Save model
+        import joblib
+
+        model_name = f"{classifier}_{exp_name}.joblib"
+        joblib.dump(model, model_name)
+        print(f"Model saved as '{model_name}'")
+        return model, None, None, {}
+
     optimizer = model.get_optimizer(learning_rate=1e-4, weight_decay=1e-3)
     criterion = nn.MSELoss()
     print(f"Starting {classifier} training for {exp_name}...")
@@ -496,6 +509,12 @@ def create_model(classifier, exp_config, device):
 
     if classifier == "linear_regression":
         return LinearRegression()
+    elif classifier == "random_forest":
+        n_estimators = exp_config.get("n_estimators", 100) if exp_config else 100
+        max_depth = exp_config.get("max_depth", None) if exp_config else None
+        return RandomForestRegressor(
+            n_estimators=n_estimators, max_depth=max_depth, n_jobs=-1, random_state=42
+        )
     elif classifier == "ddpm":
         model = DiffusionTransformerPolicy(
             obs_dim=36,

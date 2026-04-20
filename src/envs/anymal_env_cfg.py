@@ -28,6 +28,7 @@ class AnymalDFlatCameraEnvCfg:
         action_offset=0.0,
         actuator_stiffness=100.0,
         actuator_damping=6.0,
+        custom_commands_cfg=None,
     ):
         """Initialize environment configuration.
 
@@ -39,6 +40,7 @@ class AnymalDFlatCameraEnvCfg:
             action_offset: Offset for joint position actions
             actuator_stiffness: Stiffness for PD/Implicit actuators
             actuator_damping: Damping for PD/Implicit actuators
+            custom_commands_cfg: Custom velocity command configuration class
         """
         self.env_type = env_type
         self.enable_cameras = enable_cameras
@@ -47,6 +49,7 @@ class AnymalDFlatCameraEnvCfg:
         self.action_offset = action_offset
         self.actuator_stiffness = actuator_stiffness
         self.actuator_damping = actuator_damping
+        self.custom_commands_cfg = custom_commands_cfg
 
         # Initialize base configuration
         self.base_cfg = AnymalDFlatEnvCfg()
@@ -210,6 +213,11 @@ class AnymalDFlatCameraEnvCfg:
                     effort_limit=1000.0,
                 )
             }
+
+        # Apply custom velocity controller configuration if provided
+        if self.custom_commands_cfg is not None:
+            print("Applying custom velocity controller configuration")
+            self.base_cfg.commands = self.custom_commands_cfg
 
     def get_cfg(self):
         """Get the complete environment configuration."""
