@@ -143,3 +143,4 @@ wandb==0.23.0
 Werkzeug==3.0.6
 zarr==2.16.1
 zipp==3.20.2
+git+https://github.com/TheFloatingString/lococheck.git
