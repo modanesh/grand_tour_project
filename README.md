@@ -1,5 +1,11 @@
 # COMP 400 Project
 
+### TODO
+
+-[ ] Missing `RIV-1` in `./data`
+
+---
+
 <div align="center">
 
 **Offline Learning for Quadruped Locomotion using the Grand Tour Dataset**
