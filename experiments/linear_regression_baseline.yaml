@@ -1,0 +1,40 @@
+# Linear Regression Baseline Experiments
+# Usage: python demo_isaaclab.py --exp experiments/linear_regression_baseline.yaml -c linear_regression
+
+# Simple baseline with single mission
+exp-lr-single:
+  X_train_mission_list: ["LEICA-1"]
+  classifier: "linear_regression"
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "default"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+# Linear regression with multiple missions
+exp-lr-multi:
+  X_train_mission_list: ["LEICA-1", "LEICA-2", "ARC-1", "ARC-2"]
+  classifier: "linear_regression"
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "conservative"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+# Linear regression with aggressive velocity (more challenging)
+exp-lr-aggressive:
+  X_train_mission_list: ["LEICA-1", "ALB-1", "ALB-2"]
+  classifier: "linear_regression"
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "aggressive"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+# Linear regression with all ARC missions (similar terrain)
+exp-lr-arc-all:
+  X_train_mission_list: ["ARC-1", "ARC-2", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "ARC-7"]
+  classifier: "linear_regression"
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "default"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+# Notes:
+# - num_simulation_steps controls how long the simulation runs (1200 steps default)
+# - Linear regression is deterministic, no training epochs needed
+# - num_inference_steps is required for YAML compatibility but ignored
+# - Model trains instantly and saves no weights (just coefficients)

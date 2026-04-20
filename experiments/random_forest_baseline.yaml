@@ -1,0 +1,94 @@
+# Random Forest Baseline Experiments
+# Usage: python demo_isaaclab.py --exp experiments/random_forest_baseline.yaml -c random_forest
+
+# vary input dataset
+rf_exp-1:
+  X_train_mission_list: ["LEICA-1"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+rf_exp-2:
+  X_train_mission_list: ["ARC-6"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+rf_exp-3:
+  X_train_mission_list: ["CON-3"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+rf_exp-4:
+  X_train_mission_list: ["EIG-1"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+rf_exp-5:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+# vary command
+rf_exp-6:
+  X_train_mission_list: ["LEICA-1"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_fast"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+rf_exp-7:
+  X_train_mission_list: ["LEICA-1"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "default"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+rf_exp-8:
+  X_train_mission_list: ["LEICA-1"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "stationary"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+rf_exp-9:
+  X_train_mission_list: ["LEICA-1"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "y_dir_only_slow"
+  num_simulation_steps: 1200  # Duration of simulation in steps
+
+rf_exp-10:
+  X_train_mission_list: ["LEICA-1"]
+  classifier: "random_forest"
+  n_estimators: 50
+  max_depth: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "yaw_only_slow"
+  num_simulation_steps: 1200  # Duration of simulation in steps

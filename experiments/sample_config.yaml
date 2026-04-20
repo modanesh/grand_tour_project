@@ -1,0 +1,99 @@
+# Sample experiment configuration with velocity and inference settings
+# Usage: python demo_isaaclab.py --exp experiments/sample_config.yaml
+
+# Example 1: Using velocity preset with custom inference steps
+exp-aggressive-fast:
+  X_train_mission_list: ["LEICA-1"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+  # Use a preset velocity configuration
+  velocity_preset: "aggressive"
+  # Faster inference for real-time control
+  num_inference_steps: 50
+
+# Example 2: Using velocity preset with slower, more precise inference
+exp-conservative-precise:
+  X_train_mission_list: ["LEICA-1", "LEICA-2"]
+  n_epochs: 20
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+  # Conservative preset for careful movements
+  velocity_preset: "conservative"
+  # More inference steps for higher quality
+  num_inference_steps: 200
+
+# Example 3: Custom velocity configuration
+exp-custom-velocity:
+  X_train_mission_list: ["ARC-1", "ARC-2", "ARC-3"]
+  n_epochs: 15
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+  # Define custom velocity ranges
+  velocity_config:
+    lin_vel_x_range: [-1.5, 1.5]
+    lin_vel_y_range: [-0.5, 0.5]
+    ang_vel_z_range: [-1.0, 1.0]
+    heading_command: true
+    heading_control_stiffness: 1.0
+    resampling_time_range: [5.0, 10.0]
+    rel_standing_envs: 0.1
+    rel_heading_envs: 1.0
+  num_inference_steps: 100
+
+# Example 4: High-speed preset with default inference steps
+exp-high-speed:
+  X_train_mission_list: ["ALB-1", "ALB-2", "ALB-3"]
+  n_epochs: 10
+  n_attn_heads: 16
+  n_layers: 10
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+  # Maximum speed preset
+  velocity_preset: "high_speed"
+  # Uses default num_inference_steps (1200) if not specified
+
+# Example 5: Multiple experiments with different presets
+exp-exploration:
+  X_train_mission_list: ["SNOW-1", "SNOW-2", "SNOW-3"]
+  n_epochs: 10
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+  # Frequent direction changes, direct angular control
+  velocity_preset: "exploration"
+  num_inference_steps: 75
+
+exp-precision:
+  X_train_mission_list: ["CON-1", "CON-2", "CON-3", "CON-4"]
+  n_epochs: 20
+  n_attn_heads: 8
+  n_layers: 6
+  horizon: 8
+  model: "ddpm_diffuseloco_demo_isaaclab"
+  date_last_modified: "2026-APR-20"
+  # Very slow, precise movements
+  velocity_preset: "precision"
+  num_inference_steps: 150
+
+# Available velocity presets:
+# - "default": Balanced movement (2.0 m/s max speed)
+# - "aggressive": Fast movements, quick changes (3.5 m/s max speed)
+# - "conservative": Slow, careful movements (1.0 m/s max speed)
+# - "exploration": Frequent direction changes, direct angular control (2.5 m/s)
+# - "precision": Very slow, precise movements (0.5 m/s max speed)
+# - "high_speed": Maximum speed capabilities (4.0 m/s max speed)
+# - "forward_only_slow": Forward-only, very slow (0.8 m/s max speed)
+# - "reverse_only_slow": Reverse-only, very slow (-0.55 to -0.5 m/s)
