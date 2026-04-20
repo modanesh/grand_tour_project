@@ -5,14 +5,60 @@ import os
 import cv2
 import tqdm
 import math
+import yaml
+import wandb
 
 parser = ArgumentParser()
-parser.add_argument("--enable_cameras", action="store_true", default=True)
+parser.add_argument("--enable_cameras", action="store_true", default=False)
+parser.add_argument(
+    "--env",
+    type=str,
+    default="flat",
+    choices=["flat", "warehouse"],
+    help="Environment type: flat or warehouse",
+)
+parser.add_argument(
+    "--actuation-mode",
+    type=str,
+    default="SEA",
+    choices=["SEA", "PD", "Implicit"],
+    help="Actuator mode: SEA (default), PD, or Implicit",
+)
+parser.add_argument(
+    "--exp",
+    type=str,
+    default=None,
+    help="Path to YAML file containing experiment configs (e.g., experiments/data_size.yaml)",
+)
 args, _ = parser.parse_known_args()
+
+# Load experiment config(s) if specified
+EXP_CONFIGS = {}
+if args.exp:
+    exp_file = (
+        args.exp
+        if os.path.isabs(args.exp)
+        else os.path.join(os.path.dirname(__file__), args.exp)
+    )
+    if os.path.exists(exp_file):
+        with open(exp_file, "r") as f:
+            EXP_CONFIGS = yaml.safe_load(f)
+        print(f"Loaded {len(EXP_CONFIGS)} experiments from: {exp_file}")
+        for exp_name, exp_cfg in EXP_CONFIGS.items():
+            print(
+                f"  - {exp_name}: {exp_cfg.get('n_epochs', 'N/A')} epochs, {len(exp_cfg.get('X_train_mission_list', []))} missions"
+            )
+
+    else:
+        print(f"Warning: Experiment config file not found: {exp_file}")
+
+ENV_TYPE = args.env  # Save env choice before second parser
+ACTUATION_MODE = args.actuation_mode  # Save actuation mode choice
+ENABLE_CAMERAS = args.enable_cameras  # Save camera flag before second parser
 
 app_launcher = AppLauncher(
     headless=True,
-    enable_cameras=True,
+    enable_cameras=True,  # Main camera always enabled
 )
 simulation_app = app_launcher.app
 
@@ -26,14 +72,35 @@ from isaaclab.managers import ObservationTermCfg as ObsTerm
 import matplotlib.pyplot as plt
 import numpy as np
 import isaaclab.envs.mdp as mdp
+from scipy.spatial.transform import Rotation
 
 from isaaclab_tasks.manager_based.locomotion.velocity.config.anymal_d.flat_env_cfg import (
     AnymalDFlatEnvCfg,
+)
+
+# Conditionally import warehouse config
+if ENV_TYPE == "warehouse":
+    from isaaclab_tasks.manager_based.locomotion.velocity.config.anymal_d.warehouse_env_cfg import (
+        AnymalDWarehouseEnvCfg,
+    )
+from isaaclab.actuators import (
+    ImplicitActuatorCfg,
+    ActuatorNetLSTMCfg,
+    IdealPDActuatorCfg,
 )
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 import torch.nn as nn
 import torch.optim as optim
+
+# Import TransformerForDiffusion from diffusion_policy
+import sys
+import pathlib
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent / "diffusion_policy"))
+from diffusion_policy.model.diffusion.transformer_for_diffusion import (
+    TransformerForDiffusion,
+)
 
 print("isaaclab path:", isaaclab.__file__)
 print("isaaclab version:", isaaclab.__version__)
@@ -42,15 +109,63 @@ import zarr
 
 import argparse
 
+# Parse remaining args (classifier, etc.)
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--classifier", type=str, default="linear_regression")
-parser.add_argument("--force-x-unit", action="store_true", help="Force velocity command to [1, 0, 0]")
-parser.add_argument("--reference-tracking-mode", action="store_true", help="Replay recorded actions from LEICA-2 mission")
+parser.add_argument(
+    "--force-x-unit", action="store_true", help="Force velocity command to [1, 0, 0]"
+)
+parser.add_argument(
+    "--reference-tracking-mode",
+    action="store_true",
+    help="Replay recorded actions from LEICA-2 mission",
+)
 args, _ = parser.parse_known_args()
 
 CLASSIFIER = args.classifier
 FORCE_X_UNIT = args.force_x_unit
 REFERENCE_TRACKING_MODE = args.reference_tracking_mode
+
+# Initialize wandb after all config variables are defined
+if EXP_CONFIGS:
+    # Use first experiment config for logging
+    first_exp_name = list(EXP_CONFIGS.keys())[0]
+    first_exp_cfg = EXP_CONFIGS[first_exp_name]
+    wandb.init(
+        project="diffuseloco-isaaclab",
+        entity="laijoey100-the-university-of-hong-kong",
+        config={
+            "experiment_name": first_exp_name,
+            **first_exp_cfg,
+            "env_type": ENV_TYPE,
+            "actuation_mode": ACTUATION_MODE,
+            "classifier": CLASSIFIER,
+            "enable_cameras": ENABLE_CAMERAS,
+            "force_x_unit": FORCE_X_UNIT,
+            "reference_tracking_mode": REFERENCE_TRACKING_MODE,
+        },
+        name=first_exp_name,
+    )
+else:
+    # Initialize wandb without experiment config
+    wandb.init(
+        project="diffuseloco-isaaclab",
+        entity="laijoey100-the-university-of-hong-kong",
+        config={
+            "env_type": ENV_TYPE,
+            "actuation_mode": ACTUATION_MODE,
+            "classifier": CLASSIFIER,
+            "enable_cameras": ENABLE_CAMERAS,
+            "force_x_unit": FORCE_X_UNIT,
+            "reference_tracking_mode": REFERENCE_TRACKING_MODE,
+        },
+    )
+
+# Controller configuration parameters
+ACTION_SCALE = 1.0
+ACTION_OFFSET = 0.0
+ACTUATOR_STIFFNESS = 100.0
+ACTUATOR_DAMPING = 6.0
 
 
 """
@@ -98,54 +213,232 @@ REFERENCE_TRACKING_MODE = args.reference_tracking_mode
 
 
 from src.dataloader import GrandTourDataloader
+from src.utils.cv2_utils import add_main_camera_text, add_front_camera_text
+from lococheck import check_anymal_d_obs
 
-# Load data based on mode
+
+def load_data_for_experiment(exp_config, reference_tracking_mode=False):
+    """Load data based on experiment config or reference tracking mode."""
+    if reference_tracking_mode:
+        print("Loading LEICA-2 reference mission for tracking...")
+        dataloader = GrandTourDataloader(mission_names=["LEICA-1"], frequency=50)
+        reference_actions = dataloader.get_actions_isaac_lab_format(shift_by_one=True)
+        reference_obs = dataloader.get_observations_isaac_lab_format()
+        _ = check_anymal_d_obs(reference_obs)
+        print("Reference actions shape:", reference_actions.shape)
+        print("Reference observations shape:", reference_obs.shape)
+        print("Will replay", len(reference_actions), "action steps from LEICA-2")
+        initial_joint_pos = reference_obs[0][12:24]
+        print("Initial joint positions from first observation:", initial_joint_pos)
+        return None, None, reference_actions, reference_obs, initial_joint_pos
+    else:
+        if exp_config and "X_train_mission_list" in exp_config:
+            mission_list = exp_config["X_train_mission_list"]
+        else:
+            pass
+            # mission_list = ["ARC-1", "ARC-2", "ARC-3", "ARC-4", "ARC-5", "ARC-6", "ARC-7", "LEICA-1", "LEICA-2", "CON-1", "CON-2", "CON-3", "CON-4"]
+        print(f"Loading data for missions: {mission_list}")
+        dataloader = GrandTourDataloader(mission_names=mission_list, frequency=50)
+        X_data = dataloader.get_observations_isaac_lab_format()
+        Y_data = dataloader.get_actions_isaac_lab_format()
+        print("X_data shape:", X_data.shape)
+        print("Y_data shape:", Y_data.shape)
+        return X_data, Y_data, None, None, None
+
+
+# Load data based on mode (for non-experiment runs or reference tracking)
 if REFERENCE_TRACKING_MODE:
     print("Loading LEICA-2 reference mission for tracking...")
-    dataloader = GrandTourDataloader(mission_name_short="LEICA-2")
-    reference_actions = dataloader.get_actions_isaac_lab_format(mission_name="LEICA-2")
-    reference_obs = dataloader.get_observations_isaac_lab_format(mission_name="LEICA-2")
+    dataloader = GrandTourDataloader(mission_names=["LEICA-1"], frequency=50)
+    reference_actions = dataloader.get_actions_isaac_lab_format(shift_by_one=True)
+    reference_obs = dataloader.get_observations_isaac_lab_format()
+    _ = check_anymal_d_obs(reference_obs)
     print("Reference actions shape:", reference_actions.shape)
     print("Reference observations shape:", reference_obs.shape)
     print("Will replay", len(reference_actions), "action steps from LEICA-2")
+    initial_joint_pos = reference_obs[0][12:24]
+    print("Initial joint positions from first observation:", initial_joint_pos)
+    REFERENCE_INITIAL_JOINT_POS = initial_joint_pos
+    X_data, Y_data = None, None
 else:
-    dataloader = GrandTourDataloader()
-    X_data = dataloader.get_observations_isaac_lab_format()
-    Y_data = dataloader.get_actions_isaac_lab_format()
-    print("X_data shape:", X_data.shape)
-    print("Y_data shape:", Y_data.shape)
+    REFERENCE_INITIAL_JOINT_POS = None
+    if not EXP_CONFIGS:
+        mission_list = [
+            "ARC-1",
+            "ARC-2",
+            "ARC-3",
+            "ARC-4",
+            "ARC-5",
+            "ARC-6",
+            "ARC-7",
+            "LEICA-1",
+            "LEICA-2",
+            "CON-1",
+            "CON-2",
+            "CON-3",
+            "CON-4",
+        ]
+        dataloader = GrandTourDataloader(mission_names=mission_list, frequency=50)
+        X_data = dataloader.get_observations_isaac_lab_format()
+        Y_data = dataloader.get_actions_isaac_lab_format()
+        print("X_data shape:", X_data.shape)
+        print("Y_data shape:", Y_data.shape)
 
 
-# Simple DDPM Model Implementation
-class TransformerNoiseNet(nn.Module):
-    """Transformer-based noise prediction network for action trajectories"""
+# Diffusion Transformer Policy using TransformerForDiffusion
+class DiffusionTransformerPolicy(nn.Module):
+    """Diffusion policy using TransformerForDiffusion architecture.
+
+    Uses encoder-decoder transformer with observation conditioning.
+    Based on: https://github.com/real-stanford/diffusion_policy
+    """
 
     def __init__(
-        self, input_dim, hidden_dim, action_dim, horizon=1, num_layers=4, num_heads=8
+        self,
+        obs_dim=36,
+        action_dim=12,
+        horizon=8,
+        n_layer=6,
+        n_head=8,
+        n_emb=256,
+        num_timesteps=100,
+        n_obs_steps=1,
+        p_drop_emb=0.1,
+        p_drop_attn=0.1,
+        causal_attn=True,
     ):
         super().__init__()
-        self.input_proj = nn.Linear(input_dim, hidden_dim)
+        self.obs_dim = obs_dim
+        self.action_dim = action_dim
         self.horizon = horizon
+        self.num_timesteps = num_timesteps
+        self.n_obs_steps = n_obs_steps
 
-        # Transformer encoder layers
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_dim,
-            nhead=num_heads,
-            dim_feedforward=hidden_dim * 4,
-            dropout=0.1,
-            batch_first=True,
+        # TransformerForDiffusion as the noise prediction network
+        # obs_as_cond=True means observations are used as conditioning
+        # separate_goal_conditioning=True treats last 3 dims (velocity commands) as goals
+        self.model = TransformerForDiffusion(
+            input_dim=action_dim,
+            output_dim=action_dim,
+            horizon=horizon,
+            n_obs_steps=n_obs_steps,
+            cond_dim=obs_dim,
+            n_layer=n_layer,
+            n_head=n_head,
+            n_emb=n_emb,
+            p_drop_emb=p_drop_emb,
+            p_drop_attn=p_drop_attn,
+            causal_attn=causal_attn,
+            time_as_cond=True,
+            obs_as_cond=True,
+            n_cond_layers=0,
+            separate_goal_conditioning=True,
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
-        # Output projection to predict noise for each action dimension
-        self.output_proj = nn.Linear(hidden_dim, action_dim)
+        # Noise schedule - register as buffers so they move to GPU with model
+        beta = torch.linspace(0.0001, 0.02, num_timesteps)
+        alpha = 1.0 - beta
+        alpha_cumprod = torch.cumprod(alpha, dim=0)
+        alpha_cumprod_prev = torch.cat([torch.tensor([1.0]), alpha_cumprod[:-1]])
+        self.register_buffer("beta", beta)
+        self.register_buffer("alpha", alpha)
+        self.register_buffer("alpha_cumprod", alpha_cumprod)
+        self.register_buffer("alpha_cumprod_prev", alpha_cumprod_prev)
 
-    def forward(self, x):
-        # x shape: (batch, horizon, input_dim)
-        x = self.input_proj(x)  # (batch, horizon, hidden_dim)
-        x = self.transformer(x)  # (batch, horizon, hidden_dim)
-        x = self.output_proj(x)  # (batch, horizon, action_dim)
-        return x  # (batch, horizon, action_dim)
+        # Calculations for diffusion q(x_t | x_{t-1}) and others
+        self.register_buffer("sqrt_alphas_cumprod", torch.sqrt(alpha_cumprod))
+        self.register_buffer(
+            "sqrt_one_minus_alphas_cumprod", torch.sqrt(1.0 - alpha_cumprod)
+        )
+        self.register_buffer(
+            "posterior_variance",
+            beta * (1.0 - alpha_cumprod_prev) / (1.0 - alpha_cumprod),
+        )
+
+    def q_sample(self, x_start, t, noise=None):
+        """Forward diffusion process: q(x_t | x_0)"""
+        if noise is None:
+            noise = torch.randn_like(x_start)
+        sqrt_alphas_cumprod_t = self.sqrt_alphas_cumprod[t][:, None, None]
+        sqrt_one_minus_alphas_cumprod_t = self.sqrt_one_minus_alphas_cumprod[t][
+            :, None, None
+        ]
+        return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
+
+    def _prepare_cond(self, obs):
+        """Restructure obs so velocity commands [21:24] are at the end as goals.
+
+        Input: obs (batch, 36) or (batch, n_obs_steps, 36)
+        Output: cond (batch, n_obs_steps, 36) with [obs[:21], obs[24:], obs[21:24]]
+        """
+        if obs.dim() == 2:
+            obs = obs.unsqueeze(1)  # (batch, 1, obs_dim)
+        # obs shape: (batch, n_obs_steps, 36)
+        # Extract: obs[:21] (dims 0-20), obs[24:] (dims 24-35), obs[21:24] (dims 21-23, the goal)
+        obs_part1 = obs[..., :21]  # indices 0-20
+        obs_part2 = obs[..., 24:]  # indices 24-35
+        goal = obs[..., 21:24]  # indices 21-23 (velocity commands)
+        # Concatenate: [observations, goals] -> goals at the end for separate_goal_conditioning
+        cond = torch.cat([obs_part1, obs_part2, goal], dim=-1)
+        return cond
+
+    def forward(self, obs, action_traj, t):
+        """Forward pass for training - predict noise."""
+        cond = self._prepare_cond(obs)
+        return self.model(sample=action_traj, timestep=t, cond=cond)
+
+    def p_sample(self, action_traj, t, obs):
+        """Single reverse diffusion step: p(x_{t-1} | x_t)"""
+        batch_size = action_traj.shape[0]
+        t_batch = torch.full(
+            (batch_size,), t, device=action_traj.device, dtype=torch.long
+        )
+        cond = self._prepare_cond(obs)
+        with torch.no_grad():
+            pred_noise = self.model(sample=action_traj, timestep=t_batch, cond=cond)
+        alpha_t = self.alpha[t]
+        beta_t = self.beta[t]
+        alpha_cumprod_t = self.alpha_cumprod[t]
+        alpha_cumprod_prev_t = self.alpha_cumprod_prev[t]
+        pred_x0 = (
+            action_traj - torch.sqrt(1.0 - alpha_cumprod_t) * pred_noise
+        ) / torch.sqrt(alpha_cumprod_t)
+        pred_mean = torch.sqrt(alpha_cumprod_prev_t) * beta_t * pred_x0
+        pred_mean = (
+            pred_mean + torch.sqrt(alpha_t) * (1.0 - alpha_cumprod_prev_t) * action_traj
+        )
+        pred_mean = pred_mean / (1.0 - alpha_cumprod_t)
+        if t == 0:
+            return pred_mean
+        else:
+            posterior_variance_t = self.posterior_variance[t]
+            noise = torch.randn_like(action_traj)
+            return pred_mean + torch.sqrt(posterior_variance_t) * noise
+
+    def sample(self, obs, num_inference_steps=20):
+        """Sample action trajectory from observation using DDPM."""
+        batch_size = obs.shape[0]
+        device = obs.device
+        # obs shape: (batch, obs_dim) - will be processed by _prepare_cond in p_sample
+        action_traj = torch.randn(
+            batch_size, self.horizon, self.action_dim, device=device
+        )
+        timesteps = torch.linspace(
+            self.num_timesteps - 1,
+            0,
+            num_inference_steps,
+            dtype=torch.long,
+            device=device,
+        )
+        for t in timesteps:
+            action_traj = self.p_sample(action_traj, t.item(), obs)
+        return action_traj
+
+    def get_optimizer(self, learning_rate=1e-4, weight_decay=1e-3, betas=(0.9, 0.95)):
+        """Get optimizer with weight decay configuration."""
+        return self.model.configure_optimizers(
+            learning_rate=learning_rate, weight_decay=weight_decay, betas=betas
+        )
 
 
 class SimpleDDPM(nn.Module):
@@ -158,7 +451,7 @@ class SimpleDDPM(nn.Module):
         num_timesteps=100,
         use_transformer=False,
         num_heads=8,
-        horizon=16,
+        horizon=1,
     ):
         super().__init__()
         self.obs_dim = obs_dim
@@ -353,44 +646,33 @@ class SimpleDDPM(nn.Module):
 # Initialize device first
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if REFERENCE_TRACKING_MODE:
-    model = None
-    optimizer = None
-    criterion = None
-    print("Reference tracking mode - no model needed")
-elif CLASSIFIER == "linear_regression":
-    model = LinearRegression()
-    model.fit(X_data[:], Y_data[:])
-    print("RMSE: ", np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2)))
-elif CLASSIFIER == "ddpm":
-    model = SimpleDDPM(
-        obs_dim=36,
-        action_dim=12,
-        hidden_dim=256,
-        num_layers=4,
-        num_timesteps=100,
-        use_transformer=True,
-        num_heads=8,
-        horizon=1,  # Plan 1 step ahead
-    ).to(device)
-else:
-    model = DiffuseLocoModel().to(device)
-if REFERENCE_TRACKING_MODE:
-    pass  # No training needed
-elif CLASSIFIER == "linear_regression":
-    optimizer = None
-    criterion = None
-elif CLASSIFIER == "ddpm":
-#     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-#     criterion = nn.MSELoss()
-# else:
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    criterion = nn.MSELoss()
 
-if not REFERENCE_TRACKING_MODE and CLASSIFIER not in ["linear_regression", "ddpm"]:
-    # Training loop (only for custom models, not linear_regression or ddpm)
-    print(f"Starting {CLASSIFIER} training...")
-    num_epochs = 50
+def train_model(X_data, Y_data, model, exp_config, exp_name, classifier, device):
+    """Train a model based on experiment config.
+
+    Args:
+        X_data: Training observations
+        Y_data: Training actions
+        model: Pre-initialized model to train
+        exp_config: Experiment configuration dict
+        exp_name: Experiment name
+        classifier: Model type ("linear_regression", "ddpm", etc.)
+        device: torch device
+
+    Returns:
+        tuple: (model, optimizer, criterion, training_stats)
+    """
+    # Get config values with defaults
+    num_epochs = exp_config.get("n_epochs", 10) if exp_config else 10
+
+    if classifier == "linear_regression":
+        model.fit(X_data[:], Y_data[:])
+        print("RMSE: ", np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2)))
+        return model, None, None, {}
+
+    optimizer = model.get_optimizer(learning_rate=1e-4, weight_decay=1e-3)
+    criterion = nn.MSELoss()
+    print(f"Starting {classifier} training for {exp_name}...")
     model.train()
 
     # Convert data to tensors
@@ -404,124 +686,524 @@ if not REFERENCE_TRACKING_MODE and CLASSIFIER not in ["linear_regression", "ddpm
     for epoch in range(num_epochs):
         total_loss = 0
 
-        if CLASSIFIER == "ddpm":
+        if classifier == "ddpm":
             for batch_obs, batch_action in train_loader:
                 batch_size = batch_obs.shape[0]
                 batch_obs = batch_obs.to(device)
                 batch_action = batch_action.to(device)
-
-                # Reshape action to trajectory format (batch, horizon, action_dim)
-                # If data is just single actions, tile them to create trajectory
-                # In practice, you'd want action sequences from your dataset
                 action_traj = batch_action.unsqueeze(1).expand(-1, model.horizon, -1)
-
-                # Sample random diffusion timestep
                 t = torch.randint(0, model.num_timesteps, (batch_size,), device=device)
-
-                # Add noise to trajectory
                 noise = torch.randn_like(action_traj)
                 noisy_action_traj = model.q_sample(action_traj, t, noise)
-
-                # Forward pass - predict noise
                 pred_noise = model(batch_obs, noisy_action_traj, t)
                 loss = criterion(pred_noise, noise)
-
-                # Backward pass
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-
                 total_loss += loss.item()
         else:
-            # Original DiffuseLoco training
             for batch_obs, batch_next in train_loader:
                 batch_obs = batch_obs.to(device)
                 batch_next = batch_next.to(device)
-
-                # Sample random diffusion timestep
                 t = torch.randint(
                     0, model.diffusion_steps, (batch_obs.shape[0],), device=device
                 )
-
-                # Forward pass
                 pred_next = model(batch_obs, t)
                 loss = criterion(pred_next, batch_next)
-
-                # Backward pass
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-
                 total_loss += loss.item()
 
         avg_loss = total_loss / len(train_loader)
         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {avg_loss:.6f}")
 
-    if not REFERENCE_TRACKING_MODE:
-        print(f"{CLASSIFIER} training completed!")
+    print(f"{classifier} training completed for {exp_name}!")
 
-        # Test trained model
-        model.eval()
-        with torch.no_grad():
-            test_obs = torch.FloatTensor(X_data[:5]).to(device)
+    # Calculate training stats
+    total_training_steps = num_epochs * len(train_loader)
+    dataset_size = len(X_data)
+    training_stats = {
+        "training/total_steps": total_training_steps,
+        "training/num_epochs": num_epochs,
+        "training/dataset_size": dataset_size,
+        "training/batch_size": 64,
+    }
 
-            if CLASSIFIER == "ddpm":
-                # Use DDPM sampling
-                pred_joints = model.sample(test_obs, num_inference_steps=20)
-                print("DDPM sample predictions:", pred_joints.cpu().numpy())
+    # Test and save
+    model.eval()
+    with torch.no_grad():
+        test_obs = torch.FloatTensor(X_data[:5]).to(device)
+        if classifier == "ddpm":
+            pred_joints = model.sample(test_obs, num_inference_steps=20)
+            print("DDPM sample predictions:", pred_joints.cpu().numpy())
+        else:
+            test_t = torch.zeros(5, device=device)
+            pred_joints = model(test_obs, test_t)
+            print("Sample predictions:", pred_joints.cpu().numpy())
+
+    # Save with experiment name
+    model_name = f"{classifier}_{exp_name}.pth"
+    torch.save(model.state_dict(), model_name)
+    print(f"Model saved as '{model_name}'")
+
+    return model, optimizer, criterion, training_stats
+
+
+def create_model(classifier, exp_config, device):
+    """Create a model based on classifier type and experiment config.
+
+    Args:
+        classifier: Model type ("linear_regression", "ddpm", etc.)
+        exp_config: Experiment configuration dict
+        device: torch device
+
+    Returns:
+        model: Initialized model
+    """
+    # Get config values with defaults
+    horizon = exp_config.get("horizon", 8) if exp_config else 8
+    n_layer = exp_config.get("n_layers", 6) if exp_config else 6
+    n_head = exp_config.get("n_attn_heads", 8) if exp_config else 8
+
+    if classifier == "linear_regression":
+        return LinearRegression()
+    elif classifier == "ddpm":
+        model = DiffusionTransformerPolicy(
+            obs_dim=36,
+            action_dim=12,
+            horizon=horizon,
+            n_layer=n_layer,
+            n_head=n_head,
+            n_emb=256,
+            num_timesteps=100,
+            n_obs_steps=1,
+            causal_attn=True,
+        ).to(device)
+        print(
+            "Using DiffusionTransformerPolicy with TransformerForDiffusion architecture"
+        )
+        print(f"  horizon={horizon}, n_layer={n_layer}, n_head={n_head}")
+        return model
+    else:
+        model = DiffuseLocoModel().to(device)
+        return model
+
+
+# Number of simulation steps
+num_inference_steps = 2500
+
+
+def run_simulation_and_log(
+    model, exp_name, exp_config, training_stats=None, run_wandb=True
+):
+    """Run simulation loop, create video, and log to wandb.
+
+    Args:
+        model: The trained model to use for inference
+        exp_name: Experiment name for logging
+        exp_config: Experiment config dict
+        run_wandb: Whether to log to wandb (default True)
+
+    Returns:
+        dict: Reward statistics from the run
+    """
+    global \
+        env, \
+        REFERENCE_TRACKING_MODE, \
+        REFERENCE_INITIAL_JOINT_POS, \
+        FORCE_X_UNIT, \
+        CLASSIFIER
+    global \
+        ACTION_SCALE, \
+        ACTION_OFFSET, \
+        ENABLE_CAMERAS, \
+        ACTUATION_MODE, \
+        num_inference_steps
+    global device, reference_actions
+
+    # Reset environment for new run
+    cumulative_rewards = torch.zeros(env.num_envs, device=env.device)
+    finalized_episode_rewards = []
+
+    obs, info = env.reset()
+
+    # Track robot positions and episode start steps for distance/duration calculation
+    robot_positions = torch.zeros(env.num_envs, 3, device=env.device)  # x, y, z
+    episode_start_steps = torch.zeros(
+        env.num_envs, dtype=torch.int32, device=env.device
+    )
+    episode_distances = [
+        [0.0] for _ in range(env.num_envs)
+    ]  # Start with 0.0 for current episode
+    episode_durations = [
+        [] for _ in range(env.num_envs)
+    ]  # Store duration for each completed episode per robot
+
+    # Initialize wandb for this experiment
+    if run_wandb and exp_config:
+        wandb.init(
+            project="diffuseloco-isaaclab",
+            entity="laijoey100-the-university-of-hong-kong",
+            config={
+                "experiment_name": exp_name,
+                **exp_config,
+                "env_type": ENV_TYPE,
+                "actuation_mode": ACTUATION_MODE,
+                "classifier": CLASSIFIER,
+                "enable_cameras": ENABLE_CAMERAS,
+                "force_x_unit": FORCE_X_UNIT,
+                "reference_tracking_mode": REFERENCE_TRACKING_MODE,
+            },
+            name=exp_name,
+            reinit=True,
+        )
+
+    # Create experiment-specific video directory
+    exp_video_dir = f"imgs/{exp_name}"
+    os.makedirs(exp_video_dir, exist_ok=True)
+
+    # Cache for action trajectory (for DDPM with horizon)
+    action_trajectory_cache = None
+    trajectory_step = 0
+
+    # Simulation loop
+    for i in tqdm.trange(0, num_inference_steps, desc=f"Running {exp_name}"):
+        actions = torch.zeros_like(env.action_manager.action)
+
+        if REFERENCE_TRACKING_MODE:
+            # Replay recorded actions from LEICA-2 mission
+            if i < len(reference_actions):
+                recorded_action = reference_actions[i]
+                actions = torch.tensor(
+                    recorded_action, device=env.device, dtype=torch.float32
+                ).unsqueeze(0)
             else:
-                # Original testing
-                test_t = torch.zeros(5, device=device)
-                pred_joints = model(test_obs, test_t)
-                print("Sample predictions:", pred_joints.cpu().numpy())
+                recorded_action = reference_actions[-1]
+                actions = torch.tensor(
+                    recorded_action, device=env.device, dtype=torch.float32
+                ).unsqueeze(0)
 
-        # Save trained model
-        model_name = f"{CLASSIFIER}_model.pth"
-        torch.save(model.state_dict(), model_name)
-        print(f"Model saved as '{model_name}'")
+        elif CLASSIFIER == "linear_regression":
+            obs_first_36_features = process_observation(
+                obs["policy"], force_x_unit=FORCE_X_UNIT
+            )
+            actions_pred = model.predict(obs_first_36_features.cpu().numpy())
+            actions_pred = torch.tensor(
+                actions_pred, device=env.device, dtype=torch.float32
+            )
+            actions = actions_pred
+
+        elif CLASSIFIER == "ddpm":
+            obs_first_36_features = process_observation(
+                obs["policy"], force_x_unit=FORCE_X_UNIT
+            )
+            # Use cached trajectory or sample new one every `horizon` steps
+            if action_trajectory_cache is None or trajectory_step >= model.horizon:
+                with torch.no_grad():
+                    action_trajectory_cache = model.sample(
+                        obs_first_36_features, num_inference_steps=10
+                    )
+                trajectory_step = 0
+
+            # Extract current action from trajectory
+            actions = action_trajectory_cache[:, trajectory_step, :]
+            trajectory_step += 1
+
+        else:
+            # run diffuseloco model inference
+            curr_obs = obs["policy"].clone().detach()
+            curr_obs = curr_obs.to(device=device, dtype=torch.float32)
+            curr_obs = curr_obs[:, :36]
+            curr_action = model.predict(curr_obs.cpu().numpy())
+            curr_grand_tour_pos = curr_action[0]
+
+            actions[:, :] = torch.tensor(
+                curr_grand_tour_pos, device=env.device, dtype=torch.float32
+            )
+
+        obs, rew, terminated, truncated, info = env.step(actions)
+        cumulative_rewards += rew
+
+        # Track robot positions for distance calculation
+        # Extract base position from observation (assuming it's in obs["policy"])
+        # IsaacLab typically provides base position in the state or from root physx body
+        if hasattr(env, "scene") and hasattr(env.scene, "robot"):
+            robot_root_state = env.scene["robot"].data.root_state_w
+            current_pos = robot_root_state[:, :3]  # x, y, z for each env
+
+            # Calculate distance moved since last step
+            if i > 0:
+                delta_pos = torch.norm(current_pos - robot_positions, dim=1)
+                for env_idx in range(env.num_envs):
+                    if episode_distances[env_idx]:
+                        episode_distances[env_idx][-1] += delta_pos[env_idx].item()
+                    else:
+                        episode_distances[env_idx].append(delta_pos[env_idx].item())
+
+            robot_positions = current_pos.clone()
+
+        # Track finalized episodes
+        if terminated.any() or truncated.any():
+            for env_idx in range(env.num_envs):
+                if terminated[env_idx] or truncated[env_idx]:
+                    # Save episode stats
+                    finalized_episode_rewards.append(cumulative_rewards[env_idx].item())
+
+                    # Calculate episode duration
+                    episode_duration = i - episode_start_steps[env_idx].item()
+                    episode_durations[env_idx].append(episode_duration)
+
+                    # Reset tracking for next episode - start new distance accumulator
+                    cumulative_rewards[env_idx] = 0
+                    episode_start_steps[env_idx] = i
+                    episode_distances[env_idx].append(
+                        0.0
+                    )  # Start tracking distance for new episode
+
+        # Save camera frames
+        if i % 1 == 0:
+            rgb_main = env.scene["tiled_camera"].data.output["rgb"]
+            img_main = rgb_main[0].cpu().numpy()
+            img_main = cv2.cvtColor(img_main, cv2.COLOR_RGB2BGR)
+
+            add_main_camera_text(
+                img_main,
+                step=i,
+                cumulative_reward=cumulative_rewards.mean().item(),
+                actuation_mode=ACTUATION_MODE,
+                policy=CLASSIFIER,
+            )
+            cv2.imwrite(f"{exp_video_dir}/frame_{i}.png", img_main)
+
+            if ENABLE_CAMERAS:
+                rgb_front = env.scene["front_camera"].data.output["rgb"]
+                img_front = rgb_front[0].cpu().numpy()
+                img_front = cv2.cvtColor(img_front, cv2.COLOR_RGB2BGR)
+                add_front_camera_text(
+                    img_front,
+                    step=i,
+                    actuation_mode=ACTUATION_MODE,
+                    policy=CLASSIFIER,
+                )
+                cv2.imwrite(f"{exp_video_dir}/front_{i}.png", img_front)
+
+    # Create video
+    video_path = f"{exp_name}_demo.mp4"
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(video_path, fourcc, 30.0, (640, 480))
+    for i in range(num_inference_steps):
+        img = cv2.imread(f"{exp_video_dir}/frame_{i}.png")
+        if img is not None:
+            out.write(img)
+    out.release()
+    print(f"Saved: {video_path}")
+
+    # Calculate reward stats for currently active robots (accumulated but not yet terminated)
+    reward_stats = {
+        "rewards/active_robots_cumulative_mean": cumulative_rewards.mean().item(),
+        "rewards/active_robots_cumulative_std": cumulative_rewards.std().item(),
+        "rewards/active_robots_cumulative_min": cumulative_rewards.min().item(),
+        "rewards/active_robots_cumulative_max": cumulative_rewards.max().item(),
+    }
+
+    # Add stats for completed episodes (robots that have terminated)
+    if finalized_episode_rewards:
+        reward_stats.update(
+            {
+                "rewards/completed_episodes_mean": np.mean(finalized_episode_rewards),
+                "rewards/completed_episodes_std": np.std(finalized_episode_rewards),
+                "rewards/completed_episodes_min": np.min(finalized_episode_rewards),
+                "rewards/completed_episodes_max": np.max(finalized_episode_rewards),
+                "rewards/completed_episodes_count": len(finalized_episode_rewards),
+            }
+        )
+
+    # Calculate distance traveled stats (total distance per completed episode, all robots)
+    all_distances = [
+        d for robot_distances in episode_distances for d in robot_distances
+    ]
+    if all_distances:
+        reward_stats.update(
+            {
+                "distance_per_episode/total_meters_mean": np.mean(all_distances),
+                "distance_per_episode/total_meters_std": np.std(all_distances),
+                "distance_per_episode/total_meters_min": np.min(all_distances),
+                "distance_per_episode/total_meters_max": np.max(all_distances),
+            }
+        )
+
+    # Calculate episode duration stats (simulation steps per completed episode)
+    all_durations = [
+        d for robot_durations in episode_durations for d in robot_durations
+    ]
+    if all_durations:
+        reward_stats.update(
+            {
+                "episode_length/steps_mean": np.mean(all_durations),
+                "episode_length/steps_std": np.std(all_durations),
+                "episode_length/steps_min": np.min(all_durations),
+                "episode_length/steps_max": np.max(all_durations),
+            }
+        )
+
+    # Add training stats if provided
+    if training_stats:
+        reward_stats.update(training_stats)
+
+    # Log to wandb
+    if run_wandb and wandb.run is not None:
+        wandb.log(reward_stats)
+        if os.path.exists(video_path):
+            wandb.log({"demo_video": wandb.Video(video_path, fps=30, format="mp4")})
+        wandb.finish()
+
+    print(f"\n=== {exp_name} Results ===")
+    print(
+        f"Active robots - Mean: {cumulative_rewards.mean().item():.2f}, Std: {cumulative_rewards.std().item():.2f}, Min: {cumulative_rewards.min().item():.2f}, Max: {cumulative_rewards.max().item():.2f}"
+    )
+    if finalized_episode_rewards:
+        print(
+            f"Finalized episodes - Mean: {np.mean(finalized_episode_rewards):.2f}, Std: {np.std(finalized_episode_rewards):.2f}, Min: {np.min(finalized_episode_rewards):.2f}, Max: {np.max(finalized_episode_rewards):.2f}, Count: {len(finalized_episode_rewards)}"
+        )
+
+    return reward_stats
 
 
 # @configclass overrides the base class
-@configclass
-class AnymalDFlatCameraEnvCfg(AnymalDFlatEnvCfg):
+# Select base config class based on --env flag
+if ENV_TYPE == "warehouse":
+    BaseEnvCfg = AnymalDWarehouseEnvCfg
+    print("Using warehouse environment")
+else:
+    BaseEnvCfg = AnymalDFlatEnvCfg
+    print("Using flat environment")
+
+
+# @configclass
+class AnymalDFlatCameraEnvCfg(BaseEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        # add tiled camera to the existing scene config
-        self.scene.tiled_camera = TiledCameraCfg(
-            prim_path="{ENV_REGEX_NS}/Camera",
-            offset=TiledCameraCfg.OffsetCfg(
-                pos=(-12.0, 2.0, 3.0),
-                rot=(0.9945, 0.0, 0.1045, 0.0),
-                convention="world",
-            ),
-            data_types=["rgb"],
-            spawn=sim_utils.PinholeCameraCfg(
-                focal_length=24.0,
-                focus_distance=400.0,
-                horizontal_aperture=20.955,
-                clipping_range=(0.1, 20.0),
-            ),
-            width=640,
-            height=480,
-        )
+        # Camera configuration based on environment type
+        if ENV_TYPE == "flat":
+            # add tiled camera to the existing scene config
+            self.scene.tiled_camera = TiledCameraCfg(
+                prim_path="{ENV_REGEX_NS}/Camera",
+                offset=TiledCameraCfg.OffsetCfg(
+                    pos=(-12.0, 2.0, 3.0),
+                    rot=(0.9945, 0.0, 0.1045, 0.0),
+                    convention="world",
+                ),
+                data_types=["rgb"],
+                spawn=sim_utils.PinholeCameraCfg(
+                    focal_length=24.0,
+                    focus_distance=400.0,
+                    horizontal_aperture=20.955,
+                    clipping_range=(0.1, 20.0),
+                ),
+                width=640,
+                height=480,
+            )
+
+            # optional: nicer viewer pose
+            self.viewer.eye = (7.0, 0.0, 3.0)
+            self.viewer.lookat = (0.0, 0.0, 0.8)
+        else:
+            # add main scene camera - fixed in world space above robot spawn
+            top_quat = Rotation.from_euler(
+                "xyz", [-90, 0, 0], degrees=True
+            ).as_quat()  # [x,y,z,w] -> [w,x,y,z]
+            self.scene.tiled_camera = TiledCameraCfg(
+                prim_path="{ENV_REGEX_NS}/top_cam",
+                offset=TiledCameraCfg.OffsetCfg(
+                    pos=(
+                        0.0,
+                        0.0,
+                        3.0,
+                    ),  # Fixed above robot spawn (robot at ~1m height)
+                    rot=(
+                        top_quat[3],
+                        top_quat[0],
+                        top_quat[1],
+                        top_quat[2],
+                    ),  # [w,x,y,z] for isaaclab
+                    convention="world",
+                ),
+                data_types=["rgb"],
+                spawn=sim_utils.PinholeCameraCfg(
+                    focal_length=24.0,
+                    focus_distance=400.0,
+                    horizontal_aperture=20.955,
+                    clipping_range=(0.1, 50.0),  # Extended range for warehouse
+                ),
+                width=640,
+                height=480,
+            )
+
+        # add robot-mounted front camera only if cameras are enabled
+        if ENABLE_CAMERAS:
+            front_quat = Rotation.from_euler(
+                "xyz", [0, 0, 0], degrees=True
+            ).as_quat()  # Forward looking (+X)
+            self.scene.front_camera = TiledCameraCfg(
+                prim_path="{ENV_REGEX_NS}/Robot/base/front_cam",
+                offset=TiledCameraCfg.OffsetCfg(
+                    pos=(0.35, 0.0, 0.15),  # Front of robot, slightly up
+                    rot=(
+                        front_quat[3],
+                        front_quat[0],
+                        front_quat[1],
+                        front_quat[2],
+                    ),  # [w,x,y,z] for isaaclab
+                    convention="world",
+                ),
+                data_types=["rgb"],
+                spawn=sim_utils.PinholeCameraCfg(
+                    focal_length=24.0,
+                    focus_distance=400.0,
+                    horizontal_aperture=20.955,
+                    clipping_range=(0.1, 20.0),
+                ),
+                width=640,
+                height=480,
+            )
 
         # optional: nicer viewer pose
-        self.viewer.eye = (7.0, 0.0, 3.0)
-        self.viewer.lookat = (0.0, 0.0, 0.8)
+        self.viewer.eye = (6.0, -4.0, 4.0)
+        self.viewer.lookat = (0.0, 0.0, 0.5)
 
         ########### OBSERVATION AND ACTION OVERRIDE #########
+        self.observations.policy.base_lin_vel = ObsTerm(
+            func=mdp.base_lin_vel, scale=1.0
+        )
+        self.observations.policy.base_ang_vel = ObsTerm(
+            func=mdp.base_ang_vel, scale=1.0
+        )
+        self.observations.policy.projected_gravity = ObsTerm(
+            func=mdp.projected_gravity, scale=1.0
+        )
+        # TODO: add velocity command
+        # self.observations.policy.velocity_command = ObsTerm(func=mdp.velocity_command, scale=1.0)
         self.observations.policy.joint_pos = ObsTerm(func=mdp.joint_pos, scale=1.0)
         self.observations.policy.joint_vel = ObsTerm(func=mdp.joint_vel, scale=1.0)
 
         # position control instead of torque/effort control
+        # Using absolute positions (reference actions are absolute joint positions)
+        # Match original config: scale=0.5, use_default_offset=True (center around default pose)
         self.actions.joint_pos = mdp.JointPositionActionCfg(
             asset_name="robot",
             joint_names=[".*"],
-            scale=1.0,
-            offset=0.0,
-            use_default_offset=False,
+            scale=ACTION_SCALE,
+            offset=ACTION_OFFSET,
+            use_default_offset=False,  # Use default joint positions as center
         )
+
+        # Set initial joint positions to 0 for all joints
+        # NOTE: Commented out to use default standing pose - required for reference tracking
+        # self.scene.robot.init_state.joint_pos = {
+        #     ".*": 0.0,  # All joints start at 0 rad
+        # }
 
         # if the original config had another action term like joint_effort,
         # remove it so only joint position actions remain
@@ -530,19 +1212,44 @@ class AnymalDFlatCameraEnvCfg(AnymalDFlatEnvCfg):
         if hasattr(self.actions, "torques"):
             self.actions.torques = None
 
+        # Configure actuators based on --actuation-mode flag
+        if ACTUATION_MODE == "SEA":
+            # Use default SEA (Series Elastic Actuator) - LSTM-based from ANYMAL_D_CFG
+            print("Using SEA (LSTM) actuation mode")
+            # Keep default actuators from ANYMAL_D_CFG (already set)
+        elif ACTUATION_MODE == "PD":
+            print("Using PD actuation mode")
+            self.scene.robot.actuators = {
+                "legs": IdealPDActuatorCfg(
+                    joint_names_expr=[".*HAA", ".*HFE", ".*KFE"],
+                    stiffness=ACTUATOR_STIFFNESS,
+                    damping=ACTUATOR_DAMPING,
+                    effort_limit=80.0,
+                    velocity_limit=7.5,
+                )
+            }
+        elif ACTUATION_MODE == "Implicit":
+            print("Using Implicit actuation mode")
+            self.scene.robot.actuators = {
+                "legs": ImplicitActuatorCfg(
+                    joint_names_expr=[".*"],
+                    stiffness=ACTUATOR_STIFFNESS,
+                    damping=ACTUATOR_DAMPING,
+                    effort_limit=1000.0,
+                )
+            }
 
+
+# Create environment
 env_cfg = AnymalDFlatCameraEnvCfg()
 env_cfg.scene.num_envs = 8
+# Match Grand Tour data frequency (100Hz): decimation=2 * dt=0.005s = 0.01s = 100Hz
+# env_cfg.decimation = 2
 env = ManagerBasedRLEnv(cfg=env_cfg)
-
-cumulative_rewards = torch.zeros(env.num_envs, device=env.device)
-
-obs, info = env.reset()
-
-print(info)
 
 # Create imgs directory if it doesn't exist
 os.makedirs("imgs", exist_ok=True)
+
 
 # Helper function to process observations
 def process_observation(obs_full, force_x_unit=False):
@@ -561,12 +1268,125 @@ def process_observation(obs_full, force_x_unit=False):
         # velocity_commands are at indices 9:12
         # Set to [1, 0, 0] for X-direction movement
         obs_processed[:, 9:12] = torch.tensor(
-            [1.0, 0.0, 0.0],
-            device=obs_processed.device,
-            dtype=obs_processed.dtype
+            [1.0, 0.0, 0.0], device=obs_processed.device, dtype=obs_processed.dtype
         )
 
     return obs_processed
+
+
+# Run experiments or single training
+experiments_completed = False
+if EXP_CONFIGS and not REFERENCE_TRACKING_MODE:
+    trained_models = {}
+    for exp_name, exp_config in EXP_CONFIGS.items():
+        print(f"\n{'=' * 60}")
+        print(f"Running experiment: {exp_name}")
+        print(f"{'=' * 60}")
+
+        # Load data for this experiment
+        X_data, Y_data, _, _, _ = load_data_for_experiment(
+            exp_config, reference_tracking_mode=False
+        )
+
+        # Create model with experiment-specific config
+        print(f"\nCreating {CLASSIFIER} model for {exp_name}...")
+        model = create_model(CLASSIFIER, exp_config, device)
+
+        # Train model
+        model, optimizer, criterion, training_stats = train_model(
+            X_data, Y_data, model, exp_config, exp_name, CLASSIFIER, device
+        )
+        trained_models[exp_name] = model
+
+        # Run simulation and log to wandb
+        print(f"\nRunning simulation for {exp_name}...")
+        run_simulation_and_log(
+            model, exp_name, exp_config, training_stats=training_stats, run_wandb=True
+        )
+
+    print(f"\n{'=' * 60}")
+    print(f"All {len(EXP_CONFIGS)} experiments completed!")
+    print(f"{'=' * 60}")
+
+    # Use the last trained model for final simulation (if needed)
+    model = trained_models[list(trained_models.keys())[-1]]
+    optimizer = None
+    criterion = None
+    experiments_completed = True
+
+elif REFERENCE_TRACKING_MODE:
+    model = None
+    optimizer = None
+    criterion = None
+    print("Reference tracking mode - no model needed")
+
+elif CLASSIFIER == "linear_regression":
+    model = LinearRegression()
+    model.fit(X_data[:], Y_data[:])
+    print("RMSE: ", np.sqrt(np.mean((model.predict(X_data[:]) - Y_data[:]) ** 2)))
+    optimizer = None
+    criterion = None
+
+elif CLASSIFIER == "ddpm" and not experiments_completed:
+    model = DiffusionTransformerPolicy(
+        obs_dim=36,
+        action_dim=12,
+        horizon=8,
+        n_layer=6,
+        n_head=8,
+        n_emb=256,
+        num_timesteps=100,
+        n_obs_steps=1,
+        causal_attn=True,
+    ).to(device)
+    print("Using DiffusionTransformerPolicy with TransformerForDiffusion architecture")
+    optimizer = model.get_optimizer(learning_rate=1e-4, weight_decay=1e-3)
+    criterion = nn.MSELoss()
+    print(f"Starting {CLASSIFIER} training...")
+    num_epochs = 10
+    model.train()
+
+    X_tensor = torch.FloatTensor(X_data).to(device)
+    Y_tensor = torch.FloatTensor(Y_data).to(device)
+    dataset = torch.utils.data.TensorDataset(X_tensor, Y_tensor)
+    train_loader = torch.utils.data.DataLoader(dataset, batch_size=64, shuffle=True)
+
+    for epoch in range(num_epochs):
+        total_loss = 0
+        for batch_obs, batch_action in train_loader:
+            batch_size = batch_obs.shape[0]
+            batch_obs = batch_obs.to(device)
+            batch_action = batch_action.to(device)
+            action_traj = batch_action.unsqueeze(1).expand(-1, model.horizon, -1)
+            t = torch.randint(0, model.num_timesteps, (batch_size,), device=device)
+            noise = torch.randn_like(action_traj)
+            noisy_action_traj = model.q_sample(action_traj, t, noise)
+            pred_noise = model(batch_obs, noisy_action_traj, t)
+            loss = criterion(pred_noise, noise)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        avg_loss = total_loss / len(train_loader)
+        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {avg_loss:.6f}")
+
+    print(f"{CLASSIFIER} training completed!")
+    model.eval()
+    with torch.no_grad():
+        test_obs = torch.FloatTensor(X_data[:5]).to(device)
+        pred_joints = model.sample(test_obs, num_inference_steps=20)
+        print("DDPM sample predictions:", pred_joints.cpu().numpy())
+    model_name = f"{CLASSIFIER}_model.pth"
+    torch.save(model.state_dict(), model_name)
+    print(f"Model saved as '{model_name}'")
+
+elif not experiments_completed:
+    model = DiffuseLocoModel().to(device)
+    optimizer = None
+    criterion = None
+else:
+    # Model already set from experiments
+    pass
 
 
 # Cache for action trajectory (for DDPM with horizon)
@@ -576,169 +1396,31 @@ trajectory_step = 0
 # actions = torch.zeros_like(env.action_manager.action)
 # obs, rew, terminated, truncated, info = env.step(actions)
 
-# cumulative reward -> tqdm pbar label dynamically
-for i in tqdm.trange(
-    0, 1000, desc=f"Cumulative Reward: {cumulative_rewards[0].item()}"
-):
-    actions = torch.zeros_like(env.action_manager.action)
-    # actions = torch.tensor(Y_data[2000:2001], device=env.device, dtype=torch.float32)
-    # actions[:, 8] = 0.25  # set first joint to 1.0
-    # actions[:, 9] = 0.25  # set second joint to 1.0
-    # actions[:, 10] = 0.25 # set third joint to 1.0
-    # actions[:, 11] = 0.25  # set fourth joint to 1.0
 
-    if REFERENCE_TRACKING_MODE:
-        # Replay recorded actions from LEICA-2 mission
-        if i < len(reference_actions):
-            # Index into recorded actions
-            recorded_action = reference_actions[i]
-            actions = torch.tensor(
-                recorded_action, device=env.device, dtype=torch.float32
-            ).unsqueeze(0)  # Add batch dimension
+def get_progress_desc(cumulative_rewards, finalized_episode_rewards):
+    """Generate progress bar description with mean, min, max, and stdev of rewards."""
+    mean_reward = cumulative_rewards.mean().item()
+    min_reward = cumulative_rewards.min().item()
+    max_reward = cumulative_rewards.max().item()
+    current_stdev = cumulative_rewards.std().item()
 
-            if i % 100 == 0:
-                print(f"[Step {i}/{len(reference_actions)}] Replaying reference action: {recorded_action}")
-        else:
-            # Reached end of reference data, hold last action
-            recorded_action = reference_actions[-1]
-            actions = torch.tensor(
-                recorded_action, device=env.device, dtype=torch.float32
-            ).unsqueeze(0)
-            if i == len(reference_actions):
-                print(f"\n[Reference tracking complete] Reached end of LEICA-2 data at step {i}")
-                print(f"Total recorded steps: {len(reference_actions)}")
+    desc = f"Rewards: μ={mean_reward:.1f} min={min_reward:.1f} max={max_reward:.1f} σ={current_stdev:.1f}"
 
-    elif CLASSIFIER == "linear_regression":
-        print(f"model: {model}")
-        obs_first_36_features = process_observation(obs["policy"], force_x_unit=FORCE_X_UNIT)
-        actions_pred = model.predict(obs_first_36_features.cpu().numpy())
-        actions_pred = torch.tensor(
-            actions_pred, device=env.device, dtype=torch.float32
+    if len(finalized_episode_rewards) > 1:
+        finalized_stdev = np.std(finalized_episode_rewards)
+        desc += (
+            f" | Finalized σ={finalized_stdev:.1f} (n={len(finalized_episode_rewards)})"
         )
+    elif len(finalized_episode_rewards) == 1:
+        desc += f" | Finalized (n=1)"
 
-        actions = actions_pred
-        print(f"actions: {actions}")
-        print()
-
-    elif CLASSIFIER == "ddpm":
-        obs_first_36_features = process_observation(obs["policy"], force_x_unit=FORCE_X_UNIT)
-
-        # Use cached trajectory or sample new one every `horizon` steps
-        if action_trajectory_cache is None or trajectory_step >= model.horizon:
-            if i % 50 == 0:
-                print(f"[Step {i}] Sampling new action trajectory...")
-            with torch.no_grad():
-                # Sample returns (batch, horizon, action_dim)
-                action_trajectory_cache = model.sample(
-                    obs_first_36_features, num_inference_steps=10
-                )
-            trajectory_step = 0
-
-        # Extract current action from trajectory
-        actions = action_trajectory_cache[:, trajectory_step, :]  # (batch, action_dim)
-        trajectory_step += 1
-
-        if i % 50 == 0:
-            print(f"[Step {i}] Trajectory progress: {trajectory_step}/{model.horizon}")
-            print(f"  Action: {actions[0].cpu().numpy()}")
-
-    else:
-        # override all joints with the grand tour actions
-        curr_grand_tour_pos = non_translated_grand_tour_joint_positions[:, i]
-        # run diffuseloco model inference obs -> model -> action
-        curr_obs = obs["policy"].clone().detach()
-        curr_obs = curr_obs.to(device=device, dtype=torch.float32)
-        # Only use first 36 dimensions (exclude prev_actions)
-        curr_obs = curr_obs[:, :36]
-        curr_action = model.predict(curr_obs.cpu().numpy())
-        curr_grand_tour_pos = curr_action[0]
-
-        actions[:, :] = torch.tensor(
-            curr_grand_tour_pos, device=env.device, dtype=torch.float32
-        )
-
-        if i == 0:
-            print(f"actions shape: {actions.shape}")
-            print(
-                f"step {i}: rgb shape = {env.scene['tiled_camera'].data.output['rgb'].shape}"
-            )
-
-    # actions = obs["policy"][0][12:24]
-    # actions = actions.reshape(1, -1)
-    obs, rew, terminated, truncated, info = env.step(actions)
-    cumulative_rewards += rew
-
-    # Update the tqdm description with current cumulative reward
-    # tqdm.write(f"Cumulative Reward: {cumulative_rewards[0].item()}")
-    # target_pos = 1.0 * torch.ones_like(env.scene["robot"].data.joint_pos)
-    # target_vel = torch.zeros_like(env.scene["robot"].data.joint_vel)
-
-    # # Teleport the joints to the target state
-    # env.scene["robot"].write_joint_state_to_sim(target_pos, target_vel)
-
-    # obs, rew, terminated, truncated, info = env.step(torch.zeros_like(env.action_manager.action))
-
-    # pbar.set_description(f"Cumulative Reward: {cumulative_rewards[0].item()}")
-    # pbar.refresh()  # Force update display
-
-    if i % 1 == 0:
-        rgb = env.scene["tiled_camera"].data.output["rgb"]
-
-        img = rgb[0].cpu().numpy()
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
-        # add green text in the top left corner of the image
-        cv2.putText(
-            img,
-            f"step {i}",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 0),  # green (BGR)
-            2,
-            cv2.LINE_AA,
-        )
-
-        # cv2 puttext cumulative reward
-        cv2.putText(
-            img,
-            f"cumulative reward: {round(cumulative_rewards[0].item(), 3)}",
-            (10, 60),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 0),  # green (BGR)
-            2,
-            cv2.LINE_8,
-        )
-
-        # print(f"actions: {(actions[0])}")
-        # print(f"obs cmd: {obs['policy'][0][9:12]}")
-        # print(f"obs pos: {obs['policy'][0][12:24]}")
-        # print(f"obs vel: {obs['policy'][0][24:36]}")
-        # print(f"obs act: {obs['policy'][0][36:]}")
-        # print(f"rew: {rew}")
-        # print()
-
-        cv2.imwrite(f"imgs/demo_anymal_d_flat_{i}.png", img)
-    # if terminated:
-    #     break
+    return desc
 
 
-# make mp4 movie out of frames inline using cv2
-import cv2
-
-fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-out = cv2.VideoWriter("demo_anymal_d_flat.mp4", fourcc, 30.0, (640, 480))
-for i in range(0, 1000):
-    img = cv2.imread(f"imgs/demo_anymal_d_flat_{i}.png")
-    out.write(img)
-out.release()
-
-# # Print the order of joints the robot asset uses
-# print("Robot Joint Names:", env.scene["robot"].joint_names)
-# # Robot Joint Names: ['LF_HAA', 'LH_HAA', 'RF_HAA', 'RH_HAA', 'LF_HFE', 'LH_HFE', 'RF_HFE', 'RH_HFE', 'LF_KFE', 'LH_KFE', 'RF_KFE', 'RH_KFE']
-
-print("Cumulative Rewards:", cumulative_rewards)
+# If running without experiments, do single simulation run
+if not experiments_completed and not REFERENCE_TRACKING_MODE:
+    print("\nRunning single simulation (no experiments)...")
+    run_simulation_and_log(model, "single_run", None, run_wandb=True)
 
 
 # print(f"sample joint position: {grand_tour_joint_positions[10000]}")
