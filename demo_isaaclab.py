@@ -587,6 +587,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # Number of simulation steps
+# Recommended: 20-50 steps for real-time robot control
+# 1200 steps is too high for real-time applications
 num_inference_steps = 1200
 
 
@@ -1002,7 +1004,7 @@ elif CLASSIFIER == "ddpm" and not experiments_completed:
     optimizer = model.get_optimizer(learning_rate=1e-4, weight_decay=1e-3)
     criterion = nn.MSELoss()
     print(f"Starting {CLASSIFIER} training...")
-    num_epochs = 10
+    num_epochs = 20
     model.train()
 
     X_tensor = torch.FloatTensor(X_data).to(device)
@@ -1033,7 +1035,7 @@ elif CLASSIFIER == "ddpm" and not experiments_completed:
     model.eval()
     with torch.no_grad():
         test_obs = torch.FloatTensor(X_data[:5]).to(device)
-        pred_joints = model.sample(test_obs, num_inference_steps=20)
+        pred_joints = model.sample(test_obs, num_inference_steps=25)
         print("DDPM sample predictions:", pred_joints.cpu().numpy())
     model_name = f"{CLASSIFIER}_model.pth"
     torch.save(model.state_dict(), model_name)
