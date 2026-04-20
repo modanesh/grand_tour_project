@@ -6,9 +6,15 @@ import json
 
 
 class GrandTourDataloader:
-    def __init__(self, frequency: int = 100, mission_name_short: str = None):
+    def __init__(
+        self,
+        frequency: int = 100,
+        mission_name_short: str = None,
+        mission_names: list = None,
+    ):
         self.frequency = frequency  # number of samples per second
         self.mission_name_short = mission_name_short
+        self.mission_names = mission_names  # List of mission names to load
 
         # load all mission configs from json
         with open("data/config.json", "r") as f:
@@ -33,8 +39,21 @@ class GrandTourDataloader:
         self.missions_data = {}
         self.combined_data = None
 
-        # Load data for all missions or specific mission if provided
-        if mission_name_short:
+        # Load data based on provided arguments
+        if mission_names is not None:
+            # Load specific list of missions
+            if not isinstance(mission_names, (list, tuple)):
+                raise ValueError(
+                    "mission_names must be a list or tuple of mission names"
+                )
+            for mission_name in mission_names:
+                if mission_name not in self.mission_configs:
+                    raise ValueError(
+                        f"Mission '{mission_name}' not found in config.json"
+                    )
+                self.load_single_mission(mission_name)
+            self._combine_all_missions()
+        elif mission_name_short:
             if mission_name_short not in self.mission_configs:
                 raise ValueError(
                     f"Mission '{mission_name_short}' not found in config.json"
@@ -151,7 +170,11 @@ class GrandTourDataloader:
         )
         print(f"anymal_command_twist timestamps shape:", z.shape)  # shape is (nrows)
         mission_data["command_timestamps"] = z[:]
-        # load linear velocity commands from command twist
+        print("---")
+        print(f"min command_timestamps: {mission_data['command_timestamps'].min()}")
+        print(f"max command_timestamps: {mission_data['command_timestamps'].max()}")
+        print("---")
+        # load linear commands from command twist
         z = zarr.open(
             f"./data/{mission_name_short}/anymal_command_twist/linear", mode="r"
         )
@@ -635,14 +658,36 @@ if __name__ == "__main__":
     print(f"Data source: {data_source}")
     print(f"Total timestamps: {len(timestamps)}")
 
+    # Get offset from appropriate data source
+    if data_source == "combined":
+        # For combined data, use the first mission's offset as reference
+        first_mission = list(dataloader.missions_data.keys())[0]
+        offset_start = dataloader.missions_data[first_mission][
+            "offset_start_unix_absolute"
+        ]
+        offset_end = dataloader.missions_data[first_mission]["offset_end_unix_absolute"]
+    else:
+        offset_start = dataloader.missions_data[data_source][
+            "offset_start_unix_absolute"
+        ]
+        offset_end = dataloader.missions_data[data_source]["offset_end_unix_absolute"]
+
     # Plotting
     plt.figure(figsize=(12, 8))
 
     # Velocity commands
     plt.subplot(2, 1, 1)
+    # lower bound offset - vertical line spanning the plot
+    plt.axvline(
+        x=offset_start, color="orange", linestyle="--", label="timestamp lower bound"
+    )
+    # upper bound offset - vertical line spanning the plot
+    plt.axvline(
+        x=offset_end, color="orange", linestyle="--", label="timestamp upper bound"
+    )
     plt.plot(timestamps, velocity_commands[:, 0], label="velocity_command x")
     plt.plot(timestamps, velocity_commands[:, 1], label="velocity_command y")
-    plt.plot(timestamps, velocity_commands[:, 2], label="velocity_command z")
+    plt.plot(timestamps, velocity_commands[:, 2], label="velocity_command yaw")
     plt.plot(timestamps, joint_pos["LF_HAA"], label="LF_HAA")
     plt.legend()
     plt.title(f"Velocity Commands and Joint Position ({data_source})")
