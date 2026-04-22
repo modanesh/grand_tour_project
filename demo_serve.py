@@ -282,6 +282,17 @@ def run_simulation():
         obs, rew, terminated, truncated, info = env.step(actions)
         cumulative_rewards += rew
 
+        # Ghost robot: hover 1.5 m above each real robot with policy target joints
+        ghost = env.scene["ghost_robot"]
+        real_root_state = env.scene["robot"].data.root_state_w  # (N, 13)
+        ghost_root_pose = real_root_state[:, :7].clone()
+        ghost_root_pose[:, 2] += 1.5  # float above real robot
+        ghost.write_root_pose_to_sim(ghost_root_pose)
+        ghost.write_joint_state_to_sim(
+            actions.clone(),
+            torch.zeros_like(actions),
+        )
+
         # Track robot positions for distance calculation
         if hasattr(env, "scene") and hasattr(env.scene, "robot"):
             robot_root_state = env.scene["robot"].data.root_state_w

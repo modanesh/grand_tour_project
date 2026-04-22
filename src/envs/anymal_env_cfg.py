@@ -1,5 +1,7 @@
 """Environment configuration for ANYMAL robot with camera support."""
 
+import copy
+
 from isaaclab.sensors import TiledCameraCfg
 import isaaclab.sim as sim_utils
 import isaaclab.envs.mdp as mdp
@@ -213,6 +215,27 @@ class AnymalDFlatCameraEnvCfg:
                     effort_limit=1000.0,
                 )
             }
+
+        # Ghost robot: visual-only copy that shows policy target joint angles
+        ghost_cfg = copy.deepcopy(self.base_cfg.scene.robot)
+        ghost_cfg.prim_path = "{ENV_REGEX_NS}/GhostRobot"
+        # Float in place — no gravity, no collisions
+        ghost_cfg.spawn.rigid_props.disable_gravity = True
+        ghost_cfg.spawn.collision_props = sim_utils.CollisionPropertiesCfg(
+            collision_enabled=False
+        )
+        # Semi-transparent cyan tint to distinguish from real robot
+        ghost_cfg.spawn.visual_material = sim_utils.PreviewSurfaceCfg(
+            diffuse_color=(0.2, 0.8, 1.0),
+            opacity=0.4,
+            roughness=0.5,
+            metallic=0.0,
+        )
+        # No actuators — we will drive joints directly each step
+        ghost_cfg.actuators = {}
+        # Start 1.5 m above the real robot spawn height
+        ghost_cfg.init_state.pos = (0.0, 0.0, 2.1)
+        self.base_cfg.scene.ghost_robot = ghost_cfg
 
         # Apply custom velocity controller configuration if provided
         if self.custom_commands_cfg is not None:
