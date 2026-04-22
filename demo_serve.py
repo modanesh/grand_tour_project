@@ -113,7 +113,7 @@ parser.add_argument(
 args, _ = parser.parse_known_args()
 
 FORCE_X_UNIT = args.force_x_unit
-CUSTOM_VELOCITY_CFG = args.custom_velocity_cfg
+CUSTOM_VELOCITY_CFG = True  # always use custom velocity cfg so commands are nonzero
 VELOCITY_PRESET = args.velocity_preset
 
 # Observation space configuration
@@ -283,15 +283,15 @@ def run_simulation():
         cumulative_rewards += rew
 
         # Ghost robot: hover 1.5 m above each real robot with policy target joints
-        ghost = env.scene["ghost_robot"]
-        real_root_state = env.scene["robot"].data.root_state_w  # (N, 13)
-        ghost_root_pose = real_root_state[:, :7].clone()
-        ghost_root_pose[:, 2] += 1.5  # float above real robot
-        ghost.write_root_pose_to_sim(ghost_root_pose)
-        ghost.write_joint_state_to_sim(
-            actions.clone(),
-            torch.zeros_like(actions),
-        )
+        # ghost = env.scene["ghost_robot"]
+        # real_root_state = env.scene["robot"].data.root_state_w  # (N, 13)
+        # ghost_root_pose = real_root_state[:, :7].clone()
+        # ghost_root_pose[:, 2] += 1.5  # float above real robot
+        # ghost.write_root_pose_to_sim(ghost_root_pose)
+        # ghost.write_joint_state_to_sim(
+        #     actions.clone(),
+        #     torch.zeros_like(actions),
+        # )
 
         # Track robot positions for distance calculation
         if hasattr(env, "scene") and hasattr(env.scene, "robot"):
