@@ -3,7 +3,7 @@
 import cv2
 
 
-def add_main_camera_text(img, step, cumulative_reward, actuation_mode, policy):
+def add_main_camera_text(img, step, cumulative_reward, actuation_mode, policy, exp_name=""):
     """Add overlay text to main scene camera image.
 
     Args:
@@ -12,6 +12,7 @@ def add_main_camera_text(img, step, cumulative_reward, actuation_mode, policy):
         cumulative_reward: Cumulative reward value
         actuation_mode: Actuation mode string (e.g., "SEA", "PD", "Implicit")
         policy: Policy name string (e.g., "linear_regression", "ddpm")
+        exp_name: Experiment name string (e.g., "dl_exp-1")
     """
     green = (0, 255, 0)  # BGR
 
@@ -25,6 +26,17 @@ def add_main_camera_text(img, step, cumulative_reward, actuation_mode, policy):
         2,
         cv2.LINE_AA,
     )
+    if exp_name:
+        cv2.putText(
+            img,
+            f"Exp: {exp_name}",
+            (400, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            green,
+            2,
+            cv2.LINE_AA,
+        )
     cv2.putText(
         img,
         f"cumulative reward: {round(cumulative_reward, 3)}",
@@ -67,7 +79,7 @@ def add_main_camera_text(img, step, cumulative_reward, actuation_mode, policy):
     )
 
 
-def add_front_camera_text(img, step, actuation_mode, policy):
+def add_front_camera_text(img, step, actuation_mode, policy, exp_name=""):
     """Add overlay text to robot front camera image.
 
     Args:
@@ -75,6 +87,7 @@ def add_front_camera_text(img, step, actuation_mode, policy):
         step: Current simulation step
         actuation_mode: Actuation mode string (e.g., "SEA", "PD", "Implicit")
         policy: Policy name string (e.g., "linear_regression", "ddpm")
+        exp_name: Experiment name string (e.g., "dl_exp-1")
     """
     green = (0, 255, 0)  # BGR
 
@@ -88,6 +101,17 @@ def add_front_camera_text(img, step, actuation_mode, policy):
         2,
         cv2.LINE_AA,
     )
+    if exp_name:
+        cv2.putText(
+            img,
+            f"Exp: {exp_name}",
+            (400, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            green,
+            2,
+            cv2.LINE_AA,
+        )
     cv2.putText(
         img,
         "Camera: Robot Front View",

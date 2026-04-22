@@ -42,7 +42,7 @@ def _get_predictions(model, classifier, X_data, device, batch_size=64):
         predictions = model.predict(X_data)
         return torch.tensor(predictions, device=device, dtype=torch.float32)
 
-    elif classifier == "ddpm":
+    elif classifier in ("ddpm", "diffuseloco"):
         # DiffusionTransformerPolicy - sample actions
         model.eval()
         all_preds = []

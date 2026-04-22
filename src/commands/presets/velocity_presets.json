@@ -50,7 +50,7 @@
     "rel_heading_envs": 1.0
   },
   "forward_only_slow": {
-    "lin_vel_x_range": [0.5, 0.55],
+    "lin_vel_x_range": [0.2, 0.3],
     "lin_vel_y_range": [0.0, 0.0],
     "ang_vel_z_range": [0.0, 0.0],
     "heading_command": false,

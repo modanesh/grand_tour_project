@@ -26,6 +26,8 @@ class AnymalDFlatCameraEnvCfg:
         actuation_mode="SEA",
         action_scale=1.0,
         action_offset=0.0,
+        observation_scale=1.0,
+        observation_offset=0.0,
         actuator_stiffness=100.0,
         actuator_damping=6.0,
         custom_commands_cfg=None,
@@ -38,6 +40,8 @@ class AnymalDFlatCameraEnvCfg:
             actuation_mode: Actuator mode ("SEA", "PD", or "Implicit")
             action_scale: Scale for joint position actions
             action_offset: Offset for joint position actions
+            observation_scale: Scale for observation terms
+            observation_offset: Offset for observation terms (applied via modifier if non-zero)
             actuator_stiffness: Stiffness for PD/Implicit actuators
             actuator_damping: Damping for PD/Implicit actuators
             custom_commands_cfg: Custom velocity command configuration class
@@ -47,6 +51,8 @@ class AnymalDFlatCameraEnvCfg:
         self.actuation_mode = actuation_mode
         self.action_scale = action_scale
         self.action_offset = action_offset
+        self.observation_scale = observation_scale
+        self.observation_offset = observation_offset
         self.actuator_stiffness = actuator_stiffness
         self.actuator_damping = actuator_damping
         self.custom_commands_cfg = custom_commands_cfg
@@ -146,21 +152,21 @@ class AnymalDFlatCameraEnvCfg:
 
         ########### OBSERVATION AND ACTION OVERRIDE #########
         self.base_cfg.observations.policy.base_lin_vel = ObsTerm(
-            func=mdp.base_lin_vel, scale=1.0
+            func=mdp.base_lin_vel, scale=self.observation_scale
         )
         self.base_cfg.observations.policy.base_ang_vel = ObsTerm(
-            func=mdp.base_ang_vel, scale=1.0
+            func=mdp.base_ang_vel, scale=self.observation_scale
         )
         self.base_cfg.observations.policy.projected_gravity = ObsTerm(
-            func=mdp.projected_gravity, scale=1.0
+            func=mdp.projected_gravity, scale=self.observation_scale
         )
         # TODO: add velocity command
-        # self.base_cfg.observations.policy.velocity_command = ObsTerm(func=mdp.velocity_command, scale=1.0)
+        # self.base_cfg.observations.policy.velocity_command = ObsTerm(func=mdp.velocity_command, scale=self.observation_scale)
         self.base_cfg.observations.policy.joint_pos = ObsTerm(
-            func=mdp.joint_pos, scale=1.0
+            func=mdp.joint_pos, scale=self.observation_scale
         )
         self.base_cfg.observations.policy.joint_vel = ObsTerm(
-            func=mdp.joint_vel, scale=1.0
+            func=mdp.joint_vel, scale=self.observation_scale
         )
 
         # position control instead of torque/effort control
