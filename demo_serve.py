@@ -254,6 +254,13 @@ def run_simulation():
         # Use only first 36 features (obs_dim)
         curr_obs = curr_obs[:, :policy.obs_dim]
 
+        # Reorder to match training format: velocity_commands at 6:9, projected_gravity at 9:12.
+        # IsaacLab outputs [lin_vel, ang_vel, proj_grav, vel_cmd, ...]; training expects vel_cmd first.
+        proj_grav = curr_obs[:, 6:9].clone()
+        vel_cmd = curr_obs[:, 9:12].clone()
+        curr_obs[:, 6:9] = vel_cmd
+        curr_obs[:, 9:12] = proj_grav
+
         # Build observation history for the policy
         # policy expects (batch, n_obs_steps, obs_dim)
         obs_history.append(curr_obs.cpu().numpy())
