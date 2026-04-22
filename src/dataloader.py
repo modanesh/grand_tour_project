@@ -482,8 +482,8 @@ class GrandTourDataloader:
                 [
                     data["adj_base_lin_vel"],
                     data["adj_base_ang_vel"],
-                    data["adj_velocity_commands"],
                     data["adj_projected_gravity"],
+                    data["adj_velocity_commands"],
                     joint_pos_array,
                     joint_vel_array,
                 ],
@@ -516,8 +516,8 @@ class GrandTourDataloader:
                     [
                         self.combined_data["adj_base_lin_vel"][mission_slice],
                         self.combined_data["adj_base_ang_vel"][mission_slice],
-                        self.combined_data["adj_velocity_commands"][mission_slice],
                         self.combined_data["adj_projected_gravity"][mission_slice],
+                        self.combined_data["adj_velocity_commands"][mission_slice],
                         joint_pos_array,
                         joint_vel_array,
                     ],
@@ -547,8 +547,8 @@ class GrandTourDataloader:
                 [
                     data["adj_base_lin_vel"],
                     data["adj_base_ang_vel"],
-                    data["adj_velocity_commands"],
                     data["adj_projected_gravity"],
+                    data["adj_velocity_commands"],
                     joint_pos_array,
                     joint_vel_array,
                 ],
