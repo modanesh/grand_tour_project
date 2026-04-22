@@ -241,8 +241,9 @@ def run_simulation():
     # Reset observation history
     obs_history.clear()
 
-    for i in tqdm.trange(0, num_simulation_steps, desc="Running inference"):
-        # Process observation
+    global_step = 0
+    for i in tqdm.trange(0, num_simulation_steps, policy.n_action_steps, desc="Running inference"):
+        # Process observation (once per planning call)
         curr_obs = obs["policy"].clone().detach()
         curr_obs = curr_obs.to(device=env.device, dtype=torch.float32)
         curr_obs = curr_obs * OBSERVATION_SCALE + OBSERVATION_OFFSET
@@ -269,71 +270,60 @@ def run_simulation():
         obs_seq = np.transpose(obs_seq, (1, 0, 2))  # (batch, n_obs_steps, obs_dim)
         obs_tensor = torch.from_numpy(obs_seq).to(torch.device(DEVICE))
 
-        # Run policy inference
+        # Run policy inference (once per planning call)
         with torch.no_grad():
             result = policy.predict_action({"obs": obs_tensor})
 
-        # Extract action: (batch, n_action_steps, action_dim)
+        # Extract actions: (batch, n_action_steps, action_dim)
         actions_pred = result["action"]
-        # Take the first action step for immediate execution
-        actions = actions_pred[:, 0, :].to(env.device, dtype=torch.float32)
 
-        # Step environment
-        obs, rew, terminated, truncated, info = env.step(actions)
-        cumulative_rewards += rew
+        # Execute all n_action_steps before re-planning
+        for step_i in range(policy.n_action_steps):
+            actions = actions_pred[:, step_i, :].to(env.device, dtype=torch.float32)
 
-        # Ghost robot: hover 1.5 m above each real robot with policy target joints
-        # ghost = env.scene["ghost_robot"]
-        # real_root_state = env.scene["robot"].data.root_state_w  # (N, 13)
-        # ghost_root_pose = real_root_state[:, :7].clone()
-        # ghost_root_pose[:, 2] += 1.5  # float above real robot
-        # ghost.write_root_pose_to_sim(ghost_root_pose)
-        # ghost.write_joint_state_to_sim(
-        #     actions.clone(),
-        #     torch.zeros_like(actions),
-        # )
+            obs, rew, terminated, truncated, info = env.step(actions)
+            cumulative_rewards += rew
 
-        # Track robot positions for distance calculation
-        if hasattr(env, "scene") and hasattr(env.scene, "robot"):
-            robot_root_state = env.scene["robot"].data.root_state_w
-            current_pos = robot_root_state[:, :3]
+            # Track robot positions for distance calculation
+            if hasattr(env, "scene") and hasattr(env.scene, "robot"):
+                robot_root_state = env.scene["robot"].data.root_state_w
+                current_pos = robot_root_state[:, :3]
 
-            if i > 0:
-                delta_pos = torch.norm(current_pos - robot_positions, dim=1)
+                if global_step > 0:
+                    delta_pos = torch.norm(current_pos - robot_positions, dim=1)
+                    for env_idx in range(env.num_envs):
+                        if episode_distances[env_idx]:
+                            episode_distances[env_idx][-1] += delta_pos[env_idx].item()
+                        else:
+                            episode_distances[env_idx].append(delta_pos[env_idx].item())
+
+                robot_positions = current_pos.clone()
+
+            # Track finalized episodes
+            if terminated.any() or truncated.any():
                 for env_idx in range(env.num_envs):
-                    if episode_distances[env_idx]:
-                        episode_distances[env_idx][-1] += delta_pos[env_idx].item()
-                    else:
-                        episode_distances[env_idx].append(delta_pos[env_idx].item())
+                    if terminated[env_idx] or truncated[env_idx]:
+                        finalized_episode_rewards.append(cumulative_rewards[env_idx].item())
+                        episode_duration = global_step - episode_start_steps[env_idx].item()
+                        episode_durations[env_idx].append(episode_duration)
+                        cumulative_rewards[env_idx] = 0
+                        episode_start_steps[env_idx] = global_step
+                        episode_distances[env_idx].append(0.0)
 
-            robot_positions = current_pos.clone()
-
-        # Track finalized episodes
-        if terminated.any() or truncated.any():
-            for env_idx in range(env.num_envs):
-                if terminated[env_idx] or truncated[env_idx]:
-                    finalized_episode_rewards.append(cumulative_rewards[env_idx].item())
-                    episode_duration = i - episode_start_steps[env_idx].item()
-                    episode_durations[env_idx].append(episode_duration)
-                    cumulative_rewards[env_idx] = 0
-                    episode_start_steps[env_idx] = i
-                    episode_distances[env_idx].append(0.0)
-
-        # Save camera frames
-        if i % 1 == 0:
+            # Save camera frames
             rgb_main = env.scene["tiled_camera"].data.output["rgb"]
             img_main = rgb_main[0].cpu().numpy()
             img_main = cv2.cvtColor(img_main, cv2.COLOR_RGB2BGR)
 
             add_main_camera_text(
                 img_main,
-                step=i,
+                step=global_step,
                 cumulative_reward=cumulative_rewards.mean().item(),
                 actuation_mode=ACTUATION_MODE,
                 policy="diffuseloco",
                 exp_name="inference",
             )
-            cv2.imwrite(f"{video_dir}/frame_{i}.png", img_main)
+            cv2.imwrite(f"{video_dir}/frame_{global_step}.png", img_main)
 
             if ENABLE_CAMERAS:
                 rgb_front = env.scene["front_camera"].data.output["rgb"]
@@ -341,18 +331,20 @@ def run_simulation():
                 img_front = cv2.cvtColor(img_front, cv2.COLOR_RGB2BGR)
                 add_front_camera_text(
                     img_front,
-                    step=i,
+                    step=global_step,
                     actuation_mode=ACTUATION_MODE,
                     policy="diffuseloco",
                     exp_name="inference",
                 )
-                cv2.imwrite(f"{video_dir}/front_{i}.png", img_front)
+                cv2.imwrite(f"{video_dir}/front_{global_step}.png", img_front)
+
+            global_step += 1
 
     # Create video
     video_path = "inference_demo.mp4"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(video_path, fourcc, 30.0, (640, 480))
-    for i in range(num_simulation_steps):
+    for i in range(global_step):
         img = cv2.imread(f"{video_dir}/frame_{i}.png")
         if img is not None:
             out.write(img)
