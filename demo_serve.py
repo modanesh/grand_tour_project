@@ -281,6 +281,15 @@ def run_simulation():
         for step_i in range(policy.n_action_steps):
             actions = actions_pred[:, step_i, :].to(env.device, dtype=torch.float32)
 
+            # Log joint observations and action predictions for robot 0
+            if wandb.run is not None:
+                log_dict = {"step": global_step}
+                for j in range(12):
+                    log_dict[f"robot_0/joint_pos/j{j}"] = curr_obs[0, 12 + j].item()
+                    log_dict[f"robot_0/joint_vel/j{j}"] = curr_obs[0, 24 + j].item()
+                    log_dict[f"robot_0/action/j{j}"] = actions[0, j].item()
+                wandb.log(log_dict)
+
             obs, rew, terminated, truncated, info = env.step(actions)
             cumulative_rewards += rew
 
