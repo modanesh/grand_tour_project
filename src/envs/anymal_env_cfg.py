@@ -156,8 +156,11 @@ class AnymalDFlatCameraEnvCfg:
         self.base_cfg.observations.policy.projected_gravity = ObsTerm(
             func=mdp.projected_gravity, scale=1.0
         )
-        # TODO: add velocity command
-        # self.base_cfg.observations.policy.velocity_command = ObsTerm(func=mdp.velocity_command, scale=1.0)
+        self.base_cfg.observations.policy.velocity_commands = ObsTerm(
+            func=mdp.generated_commands,
+            params={"command_name": "base_velocity"},
+            scale=1.0,
+        )
         self.base_cfg.observations.policy.joint_pos = ObsTerm(
             func=mdp.joint_pos, scale=1.0
         )
