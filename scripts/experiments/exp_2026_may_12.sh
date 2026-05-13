@@ -1,0 +1,47 @@
+# on flat environment for anymal-d in IsaacLab
+
+# 50hz full
+just run_inference_diffuseloco_50hz_full stationary 50
+just run_inference_diffuseloco_50hz_full forward_only_slow 50
+just run_inference_diffuseloco_50hz_full forward_only_fast 50
+just run_inference_diffuseloco_50hz_full reverse_only_slow 50
+just run_inference_diffuseloco_50hz_full y_dir_only_slow 50
+just run_inference_diffuseloco_50hz_full yaw_only_slow 50
+just run_inference_diffuseloco_50hz_full default 50
+
+# 20hz full
+just run_inference_diffuseloco_20hz_full stationary 20
+just run_inference_diffuseloco_20hz_full forward_only_slow 20
+just run_inference_diffuseloco_20hz_full forward_only_fast 20
+just run_inference_diffuseloco_20hz_full reverse_only_slow 20
+just run_inference_diffuseloco_20hz_full y_dir_only_slow 20
+just run_inference_diffuseloco_20hz_full yaw_only_slow 20
+just run_inference_diffuseloco_20hz_full default 20
+
+# 30hz flat 
+just run_inference_diffuseloco_30hz_flat stationary 30
+just run_inference_diffuseloco_30hz_flat forward_only_slow 30
+just run_inference_diffuseloco_30hz_flat forward_only_fast 30
+just run_inference_diffuseloco_30hz_flat reverse_only_slow 30
+just run_inference_diffuseloco_30hz_flat y_dir_only_slow 30
+just run_inference_diffuseloco_30hz_flat yaw_only_slow 30
+just run_inference_diffuseloco_30hz_flat default 30
+
+# 30hz rough 
+just run_inference_diffuseloco_30hz_rough stationary 30
+just run_inference_diffuseloco_30hz_rough forward_only_slow 30
+just run_inference_diffuseloco_30hz_rough forward_only_fast 30
+just run_inference_diffuseloco_30hz_rough reverse_only_slow 30
+just run_inference_diffuseloco_30hz_rough y_dir_only_slow 30
+just run_inference_diffuseloco_30hz_rough yaw_only_slow 30
+just run_inference_diffuseloco_30hz_rough default 30
+
+# 30hz full
+just run_inference_diffuseloco_30hz_full stationary 30
+just run_inference_diffuseloco_30hz_full forward_only_slow 30
+just run_inference_diffuseloco_30hz_full forward_only_fast 30
+just run_inference_diffuseloco_30hz_full reverse_only_slow 30
+just run_inference_diffuseloco_30hz_full y_dir_only_slow 30
+just run_inference_diffuseloco_30hz_full yaw_only_slow 30
+just run_inference_diffuseloco_30hz_full default 30
+just run_inference_diffuseloco_30hz_full stationary 30
