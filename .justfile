@@ -44,4 +44,9 @@ run_isaaclab_anymal_d_quickstart:
     #!/bin/bash
     conda activate isaaclab-2-0-2
     cd IsaacLab
-    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py --task Isaac-Velocity-Flat-Anymal-D-v0 --num_envs 4096 --headless
+    WANDB_API_KEY={{WANDB_KEY_VALUE}} WANDB_ENTITY={{WANDB_ENTITY_VALUE}} ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py --task Isaac-Velocity-Flat-Anymal-D-v0 --num_envs 4096 --max_iterations 2000 --headless \
+        --logger wandb \
+        ++actions.joint_pos.scale=1.0 \
+        ++actions.joint_pos.use_default_offset=false \
+        ++actions.joint_pos.offset=0.0 \
+        ++observations.policy.enable_corruption=false
