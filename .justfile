@@ -17,6 +17,9 @@ DIFFUSELOCO_20HZ_FULL_CHECKPOINT  := "../diffuseloco-fork/DiffuseLoco/outputs/20
 DIFFUSELOCO_30HZ_FLAT_CHECKPOINT  := "../diffuseloco-fork/DiffuseLoco/outputs/2026-04-27/13-50-48/checkpoints/latest.ckpt"
 DIFFUSELOCO_30HZ_ROUGH_CHECKPOINT := "../diffuseloco-fork/DiffuseLoco/outputs/2026-04-27/01-09-41/checkpoints/latest.ckpt"
 
+# IsaacLab offline generated
+DIFFUSELOCO_50HZ_ISAACLAB_MAY_14_CHECKPOINT := "../diffuseloco-fork/DiffuseLoco/outputs/2026-05-14/16-44-42/checkpoints/latest.ckpt"
+
 quickstart:
     WANDB_API_KEY={{WANDB_KEY_VALUE}} WANDB_ENTITY={{WANDB_ENTITY_VALUE}} python demo_serve.py --checkpoint {{DIFFUSELOCO_30HZ_FULL_CHECKPOINT}} --velocity-preset forward_only_slow --controller-frequency 30
 
@@ -39,6 +42,9 @@ run_inference_diffuseloco_30hz_flat velocity_preset="forward_only_slow" controll
 
 run_inference_diffuseloco_30hz_rough velocity_preset="forward_only_slow" controller_frequency="30":
     WANDB_API_KEY={{WANDB_KEY_VALUE}} WANDB_ENTITY={{WANDB_ENTITY_VALUE}} python demo_serve.py --checkpoint {{DIFFUSELOCO_30HZ_ROUGH_CHECKPOINT}} --checkpoint-nickname "30hz_rough" --velocity-preset {{velocity_preset}} --controller-frequency {{controller_frequency}}
+
+run_inference_diffuseloco_50hz_isaaclab_may_14 velocity_preset="forward_only_slow" controller_frequency="50":
+    WANDB_API_KEY={{WANDB_KEY_VALUE}} WANDB_ENTITY={{WANDB_ENTITY_VALUE}} python demo_serve.py --checkpoint {{DIFFUSELOCO_50HZ_ISAACLAB_MAY_14_CHECKPOINT}} --checkpoint-nickname "50hz_isaaclab_may_14" --velocity-preset {{velocity_preset}} --controller-frequency {{controller_frequency}}
 
 run_isaaclab_anymal_d_quickstart:
     #!/bin/bash
