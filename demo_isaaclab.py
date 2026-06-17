@@ -748,6 +748,9 @@ def create_environment():
             )
         print("  Getting config...")
         env_cfg = env_cfg_creator.get_cfg()
+        # 30 Hz control policy (to match with DiffuseLoco paper)
+        env_cfg.sim.dt = 1 / 300  # 300 Hz physics
+        env_cfg.decimation = 10  # 30 Hz control
         env_cfg.scene.num_envs = 64
         print("  Creating ManagerBasedRLEnv...")
         env = ManagerBasedRLEnv(cfg=env_cfg)

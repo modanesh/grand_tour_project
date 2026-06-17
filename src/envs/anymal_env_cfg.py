@@ -60,7 +60,13 @@ class AnymalDFlatCameraEnvCfg:
         self.custom_commands_cfg = custom_commands_cfg
 
         # Initialize base configuration
-        self.base_cfg = AnymalDFlatEnvCfg()
+        if self.env_type == "rough":
+            from isaaclab_tasks.manager_based.locomotion.velocity.config.anymal_d.rough_env_cfg import (
+                AnymalDRoughEnvCfg,
+            )
+            self.base_cfg = AnymalDRoughEnvCfg()
+        else:
+            self.base_cfg = AnymalDFlatEnvCfg()
 
     def __post_init__(self):
         """Post-initialization configuration."""
@@ -88,6 +94,36 @@ class AnymalDFlatCameraEnvCfg:
             # optional: nicer viewer pose
             self.base_cfg.viewer.eye = (7.0, 0.0, 3.0)
             self.base_cfg.viewer.lookat = (0.0, 0.0, 0.8)
+        elif self.env_type == "rough":
+            # add tiled camera to the existing scene config with custom position and wider lens for rough terrain
+            self.base_cfg.scene.tiled_camera = TiledCameraCfg(
+                prim_path="{ENV_REGEX_NS}/Camera",
+                offset=TiledCameraCfg.OffsetCfg(
+                    pos=(-8.0, 3.0, 4.0),
+                    rot=(0.9763, 0.0, 0.2164, 0.0),  # Pitched down by ~25 degrees (w=0.9763, y=0.2164)
+                    convention="world",
+                ),
+                data_types=["rgb"],
+                spawn=sim_utils.PinholeCameraCfg(
+                    focal_length=16.0,  # Wider lens to capture more robots
+                    focus_distance=400.0,
+                    horizontal_aperture=20.955,
+                    clipping_range=(0.1, 100.0),  # Extended range to see multiple rows of robots
+                ),
+                width=640,
+                height=480,
+            )
+
+            # optional: nicer viewer pose
+            self.base_cfg.viewer.eye = (10.0, -6.0, 6.0)
+            self.base_cfg.viewer.lookat = (0.0, 0.0, 1.0)
+
+            # Make the robot-to-robot spacing smaller by reducing the sub-terrain cell size
+            if self.base_cfg.scene.terrain.terrain_generator is not None:
+                self.base_cfg.scene.terrain.terrain_generator = copy.deepcopy(
+                    self.base_cfg.scene.terrain.terrain_generator
+                )
+                self.base_cfg.scene.terrain.terrain_generator.size = (4.0, 4.0)
         else:
             # add main scene camera - fixed in world space above robot spawn
             top_quat = Rotation.from_euler(

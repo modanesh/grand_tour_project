@@ -315,6 +315,98 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)/diffusion_policy"
 python diffuseloco.py --config-name=anymal_diffusion_policy_isaaclab
 ```
 
+### IsaacLab RSL-RL Training with Overrides
+
+A modified training script is available at `IsaacLab/scripts/reinforcement_learning/rsl_rl/train.py` that supports environment overrides and automatic post-training data collection.
+
+Run via the `.justfile` recipe:
+
+```bash
+just run_isaaclab_anymal_d_quickstart
+```
+
+This applies the following **Hydra overrides** to the standard `Isaac-Velocity-Flat-Anymal-D-v0` config:
+
+| Override | Default | Override Value | Effect |
+|----------|---------|----------------|--------|
+| `++actions.joint_pos.scale` | `0.5` | `1.0` | Policy outputs are no longer halved |
+| `++actions.joint_pos.use_default_offset` | `true` | `false` | Disables ANYmal-D default pose offset |
+| `++actions.joint_pos.offset` | default pose | `0.0` | Action offset is zero (raw position targets) |
+| `++observations.policy.enable_corruption` | `true` | `false` | Disables observation noise/corruption |
+| `env_cfg.sim.dt` | `0.005` (200 Hz) | `0.002` (500 Hz) | Physics simulation frequency |
+| `env_cfg.decimation` | `4` (50 Hz) | `10` (50 Hz) | Policy control frequency |
+
+**Result:** The action pipeline becomes `processed_action = raw_policy_action * 1.0 + 0.0`, meaning the policy learns raw joint position targets with no scaling or offset, and receives clean (noise-free) observations at **50 Hz** with **500 Hz** physics.
+
+At startup, `train.py` prints a **verification block** with runtime assertions:
+```
+[VERIFY] Action/Obs Configuration:
+  Action scale   : 1.0
+  Action offset  : 0.0
+  Use default offset: False
+  Obs corruption : False
+  Empirical norm : False
+  sim.dt         : 0.002
+  decimation     : 10
+  Physics freq   : 500 Hz
+  Policy freq    : 50 Hz
+[VERIFY] All assertions passed. scale=1.0, offset=0.0, physics=500Hz, policy=50Hz.
+```
+If any assertion fails, the script aborts with a clear error message so the override misconfiguration is caught immediately.
+
+#### Post-Training Data Collection
+
+After the 10 training iterations complete, the modified `train.py` automatically runs a **post-training rollout** using the trained policy and saves the data:
+
+- **Collection:** 1,000 steps × 4,096 envs (all training envs)
+- **Output directory:** `../generated_data/` (relative to `IsaacLab/`)
+- **Files saved:**
+  - `observations.csv` — Observations before each action
+  - `next_observations.csv` — Observations after each action
+  - `actions.csv` — Policy outputs (raw, before any env scaling)
+  - `rewards.csv` — Step rewards
+  - `dones.csv` — Episode termination flags (0/1)
+  - `env_ids.csv` — Robot/environment ID for each row (0–4095)
+  - `metadata.json` — Shapes, dimensions, and total transition count
+
+These CSV files are flat `(steps × envs, dim)` matrices suitable for offline analysis. The robot uses the **LSTM actuator model** (`ActuatorNetLSTMCfg`) during simulation, so the logged actions are the **position targets** fed into the LSTM actuator network.
+
+**Robot & Episode Separation:**
+
+| File | Content | Shape |
+|------|---------|-------|
+| `observations.csv` / `actions.csv` / `rewards.csv` | Data from all robots interleaved | `(4096000, dim)` |
+| `env_ids.csv` | Robot ID for each row (0–4095) | `(4096000, 1)` |
+| `dones.csv` | Episode termination flag (0/1) | `(4096000, 1)` |
+
+**Row Alignment:**
+
+All CSV files share the **same row ordering**. Row `i` in `observations.csv` corresponds exactly to row `i` in `actions.csv`, `rewards.csv`, `next_observations.csv`, `dones.csv`, and `env_ids.csv`.
+
+| Row `i` | `observations[i]` | `actions[i]` | `rewards[i]` | `next_observations[i]` | `dones[i]` | `env_ids[i]` |
+|---------|-------------------|--------------|--------------|------------------------|------------|--------------|
+| Meaning | State before action | Action taken | Reward received | State after action | Episode ended? | Which robot |
+
+The flattening is **step-major**: step 0 for robots 0–4095, then step 1 for robots 0–4095, etc. `env_ids.csv` cycles `0,1,2,...,4095,0,1,...` confirming the alignment.
+
+To reconstruct per-robot trajectories in Python:
+```python
+import numpy as np
+
+obs = np.loadtxt("generated_data/observations.csv", delimiter=",")
+actions = np.loadtxt("generated_data/actions.csv", delimiter=",")
+env_ids = np.loadtxt("generated_data/env_ids.csv", delimiter=",", dtype=int)
+dones = np.loadtxt("generated_data/dones.csv", delimiter=",", dtype=int)
+
+for robot_id in range(4096):
+    mask = env_ids == robot_id
+    robot_obs = obs[mask]
+    robot_actions = actions[mask]
+    robot_dones = dones[mask]
+    episode_ends = np.where(robot_dones == 1)[0]
+    print(f"Robot {robot_id}: {len(robot_obs)} steps, episodes end at {episode_ends}")
+```
+
 
 ---
 

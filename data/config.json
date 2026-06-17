@@ -2,159 +2,248 @@
 
     "ETH-1": {
         "timestamp_label": "2024-10-01-11-29-55",
-        "offset_start_unix_absolute": 1727775116.2766552,
-        "offset_end_unix_absolute": 1727775166.2766552
+        "offset_start_unix_absolute": 1727775116.2766552, 
+        "offset_end_unix_absolute": 1727775166.2766552,
+        "notes": "manual clipping for walking motion"
     },
     "ETH-2": {
-        "timestamp_label": "2024-10-01-11-47-44"
+        "timestamp_label": "2024-10-01-11-47-44",
+        "offset_start_unix_absolute": 1727776107.42612,
+        "offset_end_unix_absolute": 1727776471.9767332
     },
     "ETH-3": {
-        "timestamp_label": "2024-10-01-12-00-49"
+        "timestamp_label": "2024-10-01-12-00-49",
+        "offset_start_unix_absolute": 1727776873.0764663,
+        "offset_end_unix_absolute": 1727777289.7262692
     },
     "SPX-1": {
-        "timestamp_label": "2024-11-02-17-10-25"
+        "timestamp_label": "2024-11-02-17-10-25",
+        "offset_start_unix_absolute": 1730563880.6364355,
+        "offset_end_unix_absolute": 1730564164.136304
     },
     "SPX-2": {
-        "timestamp_label": "2024-11-02-17-18-32"    
+        "timestamp_label": "2024-11-02-17-18-32",
+        "offset_start_unix_absolute": 1730564422.036412,
+        "offset_end_unix_absolute": 1730564712.8363051
     },
     "SPX-3": {
-        "timestamp_label": "2024-11-02-17-43-10"
+        "timestamp_label": "2024-11-02-17-43-10",
+        "offset_start_unix_absolute": 1730565877.0579464,
+        "offset_end_unix_absolute": 1730566042.9363194
     },
     "ICE-1": {
-        "timestamp_label": "2024-11-02-21-12-51"
+        "timestamp_label": "2024-11-02-21-12-51",
+        "offset_start_unix_absolute": 1730578509.4658487,
+        "offset_end_unix_absolute": 1730578711.7658758,
+        "notes": "second half is pushed around"
     },
     "SNOW-1": {
-        "timestamp_label": "2024-11-03-07-52-45"
+        "timestamp_label": "2024-11-03-07-52-45",
+        "offset_start_unix_absolute":  1730616850.093176,
+        "offset_end_unix_absolute": 1730616978.693113
     },
     "SNOW-2": {
-        "timestamp_label": "2024-11-03-07-57-34"
+        "timestamp_label": "2024-11-03-07-57-34",
+        "offset_start_unix_absolute": 1730617143.2931027,
+        "offset_end_unix_absolute": 1730617352.9931154
     },
     "SNOW-3": {
-        "timestamp_label": "2024-11-03-08-17-23"
+        "timestamp_label": "2024-11-03-08-17-23",
+        "offset_start_unix_absolute": 1730618321.893113,
+        "offset_end_unix_absolute": 1730618549.3931177
     },
     "EIG-1": {
-        "timestamp_label": "2024-11-03-13-51-43"
+        "timestamp_label": "2024-11-03-13-51-43",
+        "offset_start_unix_absolute": 1730638340.4267418,
+        "offset_end_unix_absolute": 1730638748.1267447
     },
     "EIG-2": {
-        "timestamp_label": "2024-11-03-13-59-54"
+        "timestamp_label": "2024-11-03-13-59-54",
+        "offset_start_unix_absolute": 1730638819.8268363,
+        "offset_end_unix_absolute": 1730639124.1267204
     },
     "GRI-1": {
-        "timestamp_label": "2024-11-04-10-57-34"
+        "timestamp_label": "2024-11-04-10-57-34",
+        "offset_start_unix_absolute": 1730714265.5359523,
+        "offset_end_unix_absolute": 1730714660.435983
     },
     "CYN-1": {
-        "timestamp_label": "2024-11-04-12-55-59"
+        "timestamp_label": "2024-11-04-12-55-59",
+        "offset_start_unix_absolute": 1730721366.4474611,
+        "offset_end_unix_absolute": 1730721812.8474152
     },
     "CYN-2": {
-        "timestamp_label": "2024-11-04-13-07-13"
+        "timestamp_label": "2024-11-04-13-07-13",
+        "offset_start_unix_absolute": 1730722077.8474276,
+        "offset_end_unix_absolute": 1730722399.7474282
     },
     "HIL-1": {
-        "timestamp_label": "2024-11-04-16-05-00"
-    },
-    "RIV-1": {
-        "timestamp_label": "2024-11-04-16-52-38"
+        "timestamp_label": "2024-11-04-16-05-00",
+        "offset_start_unix_absolute": 1730732750.7217784,
+        "offset_end_unix_absolute": 1730733155.7217567
     },
     "PIL-1": {
-        "timestamp_label": "2024-11-11-12-07-40"
+        "timestamp_label": "2024-11-11-12-07-40",
+        "offset_start_unix_absolute": 1731323279.776792,
+        "offset_end_unix_absolute": 1731324234.2767572
     },
     "PIL-2": {
-        "timestamp_label": "2024-11-11-12-42-47"
+        "timestamp_label": "2024-11-11-12-42-47",
+        "offset_start_unix_absolute": 1731325393.0057566,
+        "offset_end_unix_absolute": 1731325796.9057245
     },
     "ROOT-1": {
-        "timestamp_label": "2024-11-11-14-29-44"
+        "timestamp_label": "2024-11-11-14-29-44",
+        "offset_start_unix_absolute": 1731331883.9292202,
+        "offset_end_unix_absolute": 1731332192.4292057
     },
     "HAUS-1": {
-        "timestamp_label": "2024-11-11-16-14-23"
+        "timestamp_label": "2024-11-11-16-14-23",
+        "offset_start_unix_absolute": 1731338137.692601,
+        "offset_end_unix_absolute": 1731338481.9926186
     },
     "HOB-1": {
-        "timestamp_label": "2024-11-14-11-17-02"
+        "timestamp_label": "2024-11-14-11-17-02",
+        "offset_start_unix_absolute": 1731579432.0304453,
+        "offset_end_unix_absolute": 1731579906.2303574
     },
     "HOB-2": {
-        "timestamp_label": "2024-11-14-12-01-26"
+        "timestamp_label": "2024-11-14-12-01-26",
+        "offset_start_unix_absolute": 1731582096.2147295,
+        "offset_end_unix_absolute": 1731582517.014806
     },
     "HEAP-1": {
-        "timestamp_label": "2024-11-14-13-45-37"
+        "timestamp_label": "2024-11-14-13-45-37",
+        "offset_start_unix_absolute": 1731588418.7314084,
+        "offset_end_unix_absolute": 1731588671.631419
     },
     "KAB-1": {
-        "timestamp_label": "2024-11-14-14-36-02"
+        "timestamp_label": "2024-11-14-14-36-02",
+        "offset_start_unix_absolute": 1731591389.1425595,
+        "offset_end_unix_absolute": 1731591788.9425359
     },
     "KAB-2": {
-        "timestamp_label": "2024-11-14-15-22-43"
+        "timestamp_label": "2024-11-14-15-22-43",
+        "offset_start_unix_absolute": 1731594215.6808128,
+        "offset_end_unix_absolute": 1731594537.3808239
     },
     "KAB-3": {
-        "timestamp_label": "2024-11-14-16-04-09"
+        "timestamp_label": "2024-11-14-16-04-09",
+        "offset_start_unix_absolute": 1731596679.2369888,
+        "offset_end_unix_absolute": 1731597122.0370247
     },
     "TRIM-1": {
-        "timestamp_label": "2024-11-15-10-16-35"
+        "timestamp_label": "2024-11-15-10-16-35",
+        "offset_start_unix_absolute": 1731662216.0681615,
+        "offset_end_unix_absolute": 1731662664.368173
     },
     "ALB-1": {
-        "timestamp_label": "2024-11-15-11-18-14"
+        "timestamp_label": "2024-11-15-11-18-14",
+        "offset_start_unix_absolute": 1731665947.3746674,
+        "offset_end_unix_absolute": 1731666187.7746928
     },
     "ALB-2": {
-        "timestamp_label": "2024-11-15-11-37-15"
+        "timestamp_label": "2024-11-15-11-37-15",
+        "offset_start_unix_absolute": 1731667088.415446,
+        "offset_end_unix_absolute": 1731667548.2154582
     },
     "ALB-3": {
-        "timestamp_label": "2024-11-15-12-06-03"
+        "timestamp_label": "2024-11-15-12-06-03",
+        "offset_start_unix_absolute": 1731668822.2623577,
+        "offset_end_unix_absolute": 1731668996.1623564
     },
     "LMB-1": {
-        "timestamp_label": "2024-11-15-14-14-12"
+        "timestamp_label": "2024-11-15-14-14-12",
+        "offset_start_unix_absolute": 1731676504.8382955,
+        "offset_end_unix_absolute": 1731676920.3382547
     },
     "LMB-2": {
-        "timestamp_label": "2024-11-15-14-43-52"
+        "timestamp_label": "2024-11-15-14-43-52",
+        "offset_start_unix_absolute": 1731678297.488574,
+        "offset_end_unix_absolute": 1731678537.9885874
     },
     "LEE-1": {
-        "timestamp_label": "2024-11-15-16-41-14"
+        "timestamp_label": "2024-11-15-16-41-14",
+        "offset_start_unix_absolute": 1731685348.0737422,
+        "offset_end_unix_absolute": 1731685800.5737834
     },
     "ARC-1": {
-        "timestamp_label": "2024-11-18-12-05-01"
+        "timestamp_label": "2024-11-18-12-05-01",
+        "offset_start_unix_absolute": 1731928012.5215213,
+        "offset_end_unix_absolute": 1731928413.321522
     },
     "ARC-2": {
-        "timestamp_label": "2024-11-18-13-22-14"
+        "timestamp_label": "2024-11-18-13-22-14",
+        "offset_start_unix_absolute": 1731932611.6967542,
+        "offset_end_unix_absolute": 1731932973.596759
     },
     "ARC-3": {
-        "timestamp_label": "2024-11-18-13-48-19"
+        "timestamp_label": "2024-11-18-13-48-19",
+        "offset_start_unix_absolute": 1731934123.4353843,
+        "offset_end_unix_absolute": 1731934757.435331
     },
     "ARC-4": {
-        "timestamp_label": "2024-11-18-15-46-05"
+        "timestamp_label": "2024-11-18-15-46-05",
+        "offset_start_unix_absolute": 1731941216.1790717,
+        "offset_end_unix_absolute": 1731941569.8790894
     },
     "ARC-5": {
         "timestamp_label": "2024-11-18-16-59-23",
         "offset_start_unix_absolute": 1731945659.479141,
-        "offset_end_unix_absolute": 1731945919.479141
+        "offset_end_unix_absolute": 1731945919.479141,
+        "notes": "manual clipping for walking motion"
     },
     "ARC-6": {
         "timestamp_label": "2024-11-18-17-13-09",
         "offset_start_unix_absolute": 1731946489.6791315,
-        "offset_end_unix_absolute": 1731946754.6791315
+        "offset_end_unix_absolute": 1731946754.6791315,
+        "notes": "manual clipping for walking motion"
     },
     "ARC-7": {
-        "timestamp_label": "2024-11-18-17-31-36"
+        "timestamp_label": "2024-11-18-17-31-36",
+        "offset_start_unix_absolute": 1731947542.8790958,
+        "offset_end_unix_absolute": 1731947840.1790845
     },
     "SBB-1": {
-        "timestamp_label": "2024-12-03-13-15-38"
+        "timestamp_label": "2024-12-03-13-15-38",
+        "offset_start_unix_absolute": 1733228228.0025656,
+        "offset_end_unix_absolute": 1733228636.5026257
     },
     "SBB-2": {
-        "timestamp_label": "2024-12-03-13-26-40"
+        "timestamp_label": "2024-12-03-13-26-40",
+        "offset_start_unix_absolute": 1733228894.502575,
+        "offset_end_unix_absolute": 1733229113.3025506
     },
     "CON-1": {
-        "timestamp_label": "2024-12-09-09-34-43"
+        "timestamp_label": "2024-12-09-09-34-43",
+        "offset_start_unix_absolute": 1733733293.5729604,
+        "offset_end_unix_absolute": 1733733644.5729384
     },
     "CON-2": {
         "timestamp_label": "2024-12-09-09-41-46",
         "offset_start_unix_absolute": 1733733757.0729895,
-        "offset_end_unix_absolute": 1733733862.0729895
+        "offset_end_unix_absolute": 1733733862.0729895,
+        "notes": "manual clipping for walking motion"
     },
     "CON-3": {
-        "timestamp_label": "2024-12-09-11-28-28"
+        "timestamp_label": "2024-12-09-11-28-28",
+        "offset_start_unix_absolute": 1733740133.135244,
+        "offset_end_unix_absolute": 1733740674.2353091
     },
     "CON-4": {
-        "timestamp_label": "2024-12-09-11-53-11"
+        "timestamp_label": "2024-12-09-11-53-11",
+        "offset_start_unix_absolute": 1733741631.9352877,
+        "offset_end_unix_absolute": 1733742258.635272
     },
     "LEICA-1": {
-        "timestamp_label": "2024-11-25-14-57-08"
+        "timestamp_label": "2024-11-25-14-57-08",
+        "offset_start_unix_absolute": 1732543092.0221608,
+        "offset_end_unix_absolute": 1732543342.5221808
     },
     "LEICA-2": {
         "timestamp_label": "2024-11-25-16-36-19",
         "offset_start_unix_absolute": 1732549048.140252,
-        "offset_end_unix_absolute": 1732549418.140252
+        "offset_end_unix_absolute": 1732549418.140252,
+        "notes": "manual clipping for walking motion"
     }
 }

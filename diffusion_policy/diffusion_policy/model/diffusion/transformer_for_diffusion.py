@@ -1,4 +1,4 @@
-from typing import Union, Optional, Tuple
+from typing import Union, Optional, Tuple, Sequence
 import logging
 import torch
 import torch.nn as nn
@@ -25,6 +25,7 @@ class TransformerForDiffusion(ModuleAttrMixin):
             obs_as_cond: bool=False,
             n_cond_layers: int = 0, 
             separate_goal_conditioning: bool = False,
+            goal_indices: Sequence[int] = (6, 7, 8),
             is_cassie: bool = False,
             is_ref: bool = False,
         ) -> None:
@@ -33,6 +34,7 @@ class TransformerForDiffusion(ModuleAttrMixin):
         self.is_cassie = is_cassie
         self.is_ref = is_ref
         self.separate_goal_conditioning = separate_goal_conditioning
+        self.goal_indices = list(goal_indices)
 
         # compute number of tokens for main trunk and condition encoder
         if n_obs_steps is None:
@@ -65,8 +67,8 @@ class TransformerForDiffusion(ModuleAttrMixin):
         
         if obs_as_cond:
             if separate_goal_conditioning and not self.is_cassie:
-                self.cond_obs_emb = nn.Linear(cond_dim-3, n_emb)
-                self.cond_obs_emb_2 = nn.Linear(3, n_emb)
+                self.cond_obs_emb = nn.Linear(cond_dim-len(self.goal_indices), n_emb)
+                self.cond_obs_emb_2 = nn.Linear(len(self.goal_indices), n_emb)
             elif separate_goal_conditioning and self.is_cassie:
                 if self.is_ref:
                     self.cond_obs_emb = nn.Linear(cond_dim-5-30, n_emb)
@@ -359,8 +361,12 @@ class TransformerForDiffusion(ModuleAttrMixin):
             cond_embeddings = time_emb
             if self.obs_as_cond:
                 if self.separate_goal_conditioning and not self.is_cassie:
-                    cond_obs_emb = self.cond_obs_emb(torch.cat([cond[...,:6], cond[...,9:]], dim=-1))
-                    cond_obs_emb_2 = self.cond_obs_emb_2(cond[...,6:9])
+                    # Create a mask for proprioceptive indices (all indices not in goal_indices)
+                    obs_dim = cond.shape[-1]
+                    non_goal_indices = [i for i in range(obs_dim) if i not in self.goal_indices]
+                    
+                    cond_obs_emb = self.cond_obs_emb(cond[..., non_goal_indices])
+                    cond_obs_emb_2 = self.cond_obs_emb_2(cond[..., self.goal_indices])
                     # (B,To,n_emb)
                     cond_embeddings = torch.cat([cond_embeddings, cond_obs_emb, cond_obs_emb_2], dim=1)
                 elif self.separate_goal_conditioning and self.is_cassie:
@@ -683,22 +689,6 @@ class TransformerForDiffusionInferenceCassie(ModuleAttrMixin):
         )
         # (B,T,n_emb)
         
-        # decoder
-        token_embeddings = input_emb
-        t = token_embeddings.shape[1]
-        position_embeddings = self.pos_emb[
-            :, :t, :
-        ]  # each position maps to a (learnable) vector
-        x = self.drop(token_embeddings + position_embeddings)
-        # (B,T,n_emb)
-        x = self.decoder(
-            tgt=x,
-            memory=memory,
-            tgt_mask=self.mask,
-            memory_mask=self.memory_mask
-        )
-        # (B,T,n_emb)
-        
         # head
         x = self.ln_f(x)
         x = self.head(x)
@@ -961,22 +951,6 @@ class TransformerForDiffusionInferenceGo1(ModuleAttrMixin):
         memory = x
         # (B,T_cond,n_emb)
 
-        # decoder
-        token_embeddings = input_emb
-        t = token_embeddings.shape[1]
-        position_embeddings = self.pos_emb[
-            :, :t, :
-        ]  # each position maps to a (learnable) vector
-        x = self.drop(token_embeddings + position_embeddings)
-        # (B,T,n_emb)
-        x = self.decoder(
-            tgt=x,
-            memory=memory,
-            tgt_mask=self.mask,
-            memory_mask=self.memory_mask
-        )
-        # (B,T,n_emb)
-        
         # decoder
         token_embeddings = input_emb
         t = token_embeddings.shape[1]

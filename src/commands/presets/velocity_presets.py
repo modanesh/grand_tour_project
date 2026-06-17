@@ -39,10 +39,10 @@ VELOCITY_PRESETS = _load_velocity_presets()
 
 # Default custom velocity controller configuration parameters
 VELOCITY_CONFIG = {
-    "lin_vel_x_range": (-2.0, 2.0),  # Linear velocity X range (m/s)
-    "lin_vel_y_range": (-1.5, 1.5),  # Linear velocity Y range (m/s)
-    "ang_vel_z_range": (-1.5, 1.5),  # Angular velocity Z range (rad/s)
-    "heading_command": True,  # Use heading-based control
+    "lin_vel_x_range": (0.2, 0.35),  # Linear velocity X range (m/s)
+    "lin_vel_y_range": (-0.05, 0.05),  # Linear velocity Y range (m/s)
+    "ang_vel_z_range": (-0.1, 0.1),  # Angular velocity Z range (rad/s)
+    "heading_command": False,  # Use heading-based control
     "heading_control_stiffness": 0.8,  # Heading control stiffness
     "resampling_time_range": (8.0, 12.0),  # Command resampling time range (s)
     "rel_standing_envs": 0.05,  # Probability of standing environments

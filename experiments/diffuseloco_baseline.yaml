@@ -1,0 +1,649 @@
+# Diffusion Transformer Policy (DiffuseLoco) Baseline Experiments
+# Usage: python demo_isaaclab.py --exp experiments/diffuseloco_baseline.yaml -c diffuseloco
+#
+# Faithful implementation using:
+# - diffuselocoScheduler from diffusers
+# - LowdimMaskGenerator for conditioning
+# - Proper conditional_sample inference
+# - Proper compute_loss training
+# - No normalization (as requested)
+
+# Diffusion Policy Hyperparameters Reference:
+# - horizon: Length of action trajectory to generate
+# - n_layer: Number of transformer decoder layers
+# - n_head: Number of attention heads
+# - n_emb: Embedding dimension
+# - num_train_timesteps: Training diffusion steps (100 default)
+# - num_inference_steps: Inference diffusion steps (20 default, fewer for speed)
+# - beta_schedule: "linear" or "scaled_linear"
+# - prediction_type: "epsilon" (predict noise) or "sample" (predict clean sample)
+# - action_chunking: true/false - execute n_action_steps from sampled trajectory before re-planning
+# - n_obs_steps: Number of observation timesteps in conditioning window (1 or 2)
+# - n_action_steps: Number of actions to execute from sampled trajectory (only used if action_chunking: true)
+
+# =============================================================================
+# SECTION 1: Velocity Command vs Reward (200 epochs, HAUS...LEICA)
+# Dataset: HAUS-1, LEICA-1, LEICA-2 (flat environments)
+# Expected behavior varies by velocity command type
+# =============================================================================
+
+# # dl_exp-1: Forward only slow - moves forward slowly
+# dl_exp-1:
+#   X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+#   classifier: "diffuseloco"
+#   n_epochs: 100
+#   date_last_modified: "2026-APR-20"
+#   velocity_preset: "forward_only_slow"
+#   num_simulation_steps: 1200
+#   horizon: 16
+#   n_layers: 6
+#   n_attn_heads: 8
+#   n_emb: 256
+#   num_train_timesteps: 100
+#   num_inference_steps: 20
+#   beta_schedule: "linear"
+#   beta_start: 0.0001
+#   beta_end: 0.02
+#   prediction_type: "epsilon"
+#   n_obs_steps: 1
+#   n_action_steps: 1
+#   causal_attn: true
+#   separate_goal_conditioning: true
+
+# # dl_exp-2: Forward only fast - struggles to run well
+# dl_exp-2:
+#   X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+#   classifier: "diffuseloco"
+#   n_epochs: 100
+#   date_last_modified: "2026-APR-20"
+#   velocity_preset: "forward_only_fast"
+#   num_simulation_steps: 1200
+#   horizon: 16
+#   n_layers: 6
+#   n_attn_heads: 8
+#   n_emb: 256
+#   num_train_timesteps: 100
+#   num_inference_steps: 20
+#   beta_schedule: "linear"
+#   beta_start: 0.0001
+#   beta_end: 0.02
+#   prediction_type: "epsilon"
+#   n_obs_steps: 1
+#   n_action_steps: 1
+#   causal_attn: true
+#   separate_goal_conditioning: true
+
+# # dl_exp-3: Stationary - good at standing
+# dl_exp-3:
+#   X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+#   classifier: "diffuseloco"
+#   n_epochs: 100
+#   date_last_modified: "2026-APR-20"
+#   velocity_preset: "stationary"
+#   num_simulation_steps: 1200
+#   horizon: 16
+#   n_layers: 6
+#   n_attn_heads: 8
+#   n_emb: 256
+#   num_train_timesteps: 100
+#   num_inference_steps: 20
+#   beta_schedule: "linear"
+#   beta_start: 0.0001
+#   beta_end: 0.02
+#   prediction_type: "epsilon"
+#   n_obs_steps: 1
+#   n_action_steps: 1
+#   causal_attn: true
+#   separate_goal_conditioning: true
+
+# # dl_exp-4: Reverse only slow - does not know how to reverse
+# dl_exp-4:
+#   X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+#   classifier: "diffuseloco"
+#   n_epochs: 100
+#   date_last_modified: "2026-APR-20"
+#   velocity_preset: "reverse_only_slow"
+#   num_simulation_steps: 1200
+#   horizon: 16
+#   n_layers: 6
+#   n_attn_heads: 8
+#   n_emb: 256
+#   num_train_timesteps: 100
+#   num_inference_steps: 20
+#   beta_schedule: "linear"
+#   beta_start: 0.0001
+#   beta_end: 0.02
+#   prediction_type: "epsilon"
+#   n_obs_steps: 1
+#   n_action_steps: 1
+#   causal_attn: true
+#   separate_goal_conditioning: true
+
+# # dl_exp-5: Y-direction only slow - falls over
+# dl_exp-5:
+#   X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+#   classifier: "diffuseloco"
+#   n_epochs: 100
+#   date_last_modified: "2026-APR-20"
+#   velocity_preset: "y_dir_only_slow"
+#   num_simulation_steps: 1200
+#   horizon: 16
+#   n_layers: 6
+#   n_attn_heads: 8
+#   n_emb: 256
+#   num_train_timesteps: 100
+#   num_inference_steps: 20
+#   beta_schedule: "linear"
+#   beta_start: 0.0001
+#   beta_end: 0.02
+#   prediction_type: "epsilon"
+#   n_obs_steps: 1
+#   n_action_steps: 1
+#   causal_attn: true
+#   separate_goal_conditioning: true
+
+# dl_exp-6: Yaw only slow - falls over
+dl_exp-6:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "yaw_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# # dl_exp-7: Default velocity - only succeeds at forward
+# dl_exp-7:
+#   X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+#   classifier: "diffuseloco"
+#   n_epochs: 200
+#   date_last_modified: "2026-APR-20"
+#   velocity_preset: "default"
+#   num_simulation_steps: 1200
+#   horizon: 16
+#   n_layers: 6
+#   n_attn_heads: 8
+#   n_emb: 256
+#   num_train_timesteps: 100
+#   num_inference_steps: 20
+#   beta_schedule: "linear"
+#   beta_start: 0.0001
+#   beta_end: 0.02
+#   prediction_type: "epsilon"
+#   n_obs_steps: 1
+#   n_action_steps: 1
+#   causal_attn: true
+#   separate_goal_conditioning: true
+
+
+# =============================================================================
+# SECTION 2: Training Data Distribution and Quantity vs Reward
+# Velocity: forward_only_slow, Epochs: 200
+# =============================================================================
+
+# dl_exp-8: LEICA-1 only - Mostly flat, can do forward walking
+dl_exp-8:
+  X_train_mission_list: ["LEICA-1"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# dl_exp-9: Variable environments - SNOW-1, ALB-1, HEAP-1, ETH-1, HIL-1
+dl_exp-9:
+  X_train_mission_list: ["SNOW-1", "ALB-1", "HEAP-1", "ETH-1", "HIL-1"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# dl_exp-10: ARC-6 only - Mostly flat, can do forward walking
+dl_exp-10:
+  X_train_mission_list: ["ARC-6"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# dl_exp-11: CON-3 only - Flat with stairs, falls over a lot
+dl_exp-11:
+  X_train_mission_list: ["CON-3"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# dl_exp-12: EIG-1 only - Walking down in outdoor setting, falls over a lot
+dl_exp-12:
+  X_train_mission_list: ["EIG-1"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# # dl_exp-13: Collection of flat environments - HAUS-1, ARC-5, ARC-6, LEICA-1, LEICA-2
+# dl_exp-13:
+#   X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+#   classifier: "diffuseloco"
+#   n_epochs: 200
+#   date_last_modified: "2026-APR-20"
+#   velocity_preset: "forward_only_slow"
+#   num_simulation_steps: 1200
+#   horizon: 16
+#   n_layers: 6
+#   n_attn_heads: 8
+#   n_emb: 256
+#   num_train_timesteps: 100
+#   num_inference_steps: 20
+#   beta_schedule: "linear"
+#   beta_start: 0.0001
+#   beta_end: 0.02
+#   prediction_type: "epsilon"
+#   n_obs_steps: 1
+#   n_action_steps: 1
+#   causal_attn: true
+#   separate_goal_conditioning: true
+
+
+# =============================================================================
+# SECTION 3: Epochs vs Reward (forward only slow, HAUS...LEICA-1)
+# Dataset: HAUS-1, LEICA-1
+# Velocity: forward_only_slow
+# =============================================================================
+
+# dl_exp-14: 100 epochs
+# dl_exp-14:
+#   X_train_mission_list: ["HAUS-1", "LEICA-1"]
+#   classifier: "diffuseloco"
+#   n_epochs: 100
+#   date_last_modified: "2026-APR-20"
+#   velocity_preset: "forward_only_slow"
+#   num_simulation_steps: 1200
+#   horizon: 16
+#   n_layers: 6
+#   n_attn_heads: 8
+#   n_emb: 256
+#   num_train_timesteps: 100
+#   num_inference_steps: 20
+#   beta_schedule: "linear"
+#   beta_start: 0.0001
+#   beta_end: 0.02
+#   prediction_type: "epsilon"
+#   n_obs_steps: 1
+#   n_action_steps: 1
+#   causal_attn: true
+#   separate_goal_conditioning: true
+
+# dl_exp-15: 200 epochs
+dl_exp-15:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 10
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# dl_exp-16: 500 epochs
+dl_exp-16:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 50
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# dl_exp-17: 1000 epochs
+dl_exp-17:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 300
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+
+# =============================================================================
+# SECTION 4: Model Complexity vs Reward (forward only slow, 250 epochs, HAUS...LEICA)
+# Dataset: HAUS-1, LEICA-1, LEICA-2
+# Velocity: forward_only_slow
+# Note: Random forest regression and Diffuseloco default are baseline references
+# =============================================================================
+
+# dl_exp-18-minor: Diffuseloco with more layers (1, 6, 10, 20)
+# Sub-experiment A: 1 layer
+dl_exp-18a:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 1
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# Sub-experiment B: 6 layers (default)
+dl_exp-18b:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# Sub-experiment C: 10 layers
+dl_exp-18c:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 10
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# Sub-experiment D: 20 layers
+dl_exp-18d:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 20
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# dl_exp-19-minor: Diffuseloco with more attention heads (2, 4, 8, 16, 32)
+# Sub-experiment A: 2 heads
+dl_exp-19a:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 2
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# Sub-experiment B: 4 heads
+dl_exp-19b:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 4
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# Sub-experiment C: 8 heads (default)
+dl_exp-19c:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 8
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# Sub-experiment D: 16 heads
+dl_exp-19d:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 16
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true
+
+# Sub-experiment E: 32 heads
+dl_exp-19e:
+  X_train_mission_list: ["HAUS-1", "ARC-5", "ARC-6", "LEICA-1", "LEICA-2"]
+  classifier: "diffuseloco"
+  n_epochs: 100
+  date_last_modified: "2026-APR-20"
+  velocity_preset: "forward_only_slow"
+  num_simulation_steps: 1200
+  horizon: 16
+  n_layers: 6
+  n_attn_heads: 32
+  n_emb: 256
+  num_train_timesteps: 100
+  num_inference_steps: 20
+  beta_schedule: "linear"
+  beta_start: 0.0001
+  beta_end: 0.02
+  prediction_type: "epsilon"
+  n_obs_steps: 1
+  n_action_steps: 1
+  causal_attn: true
+  separate_goal_conditioning: true

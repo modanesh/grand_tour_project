@@ -12,3 +12,6 @@
 **/*.egg-info/
 outputs/
 aligned_data.zarr
+
+# tentative just so git commands are easier
+data

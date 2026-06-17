@@ -38,8 +38,8 @@ parser.add_argument(
     "--env",
     type=str,
     default="flat",
-    choices=["flat", "warehouse"],
-    help="Environment type: flat or warehouse",
+    choices=["flat", "warehouse", "rough"],
+    help="Environment type: flat, warehouse, or rough",
 )
 parser.add_argument(
     "--actuation-mode",
@@ -49,6 +49,7 @@ parser.add_argument(
     help="Actuator mode: SEA (default), PD, or Implicit",
 )
 parser.add_argument("--checkpoint", type=str, required=True, help="Path to DiffuseLoco .ckpt file")
+parser.add_argument("--checkpoint-nickname", type=str, required=True, help="Nickname for the checkpoint")
 parser.add_argument("--device", type=str, default="cuda:0", help="Device to run inference on")
 args, _ = parser.parse_known_args()
 
@@ -56,6 +57,7 @@ ENV_TYPE = args.env
 ACTUATION_MODE = args.actuation_mode
 ENABLE_CAMERAS = args.enable_cameras
 CHECKPOINT = args.checkpoint
+CHECKPOINT_NICKNAME = args.checkpoint_nickname
 DEVICE = args.device
 
 app_launcher = AppLauncher(
@@ -79,6 +81,10 @@ from isaaclab_tasks.manager_based.locomotion.velocity.config.anymal_d.flat_env_c
 if ENV_TYPE == "warehouse":
     from isaaclab_tasks.manager_based.locomotion.velocity.config.anymal_d.warehouse_env_cfg import (
         AnymalDWarehouseEnvCfg,
+    )
+elif ENV_TYPE == "rough":
+    from isaaclab_tasks.manager_based.locomotion.velocity.config.anymal_d.rough_env_cfg import (
+        AnymalDRoughEnvCfg,
     )
 from isaaclab.envs.mdp import UniformVelocityCommandCfg
 
@@ -110,15 +116,37 @@ parser.add_argument(
     choices=list(VELOCITY_PRESETS.keys()),
     help="Velocity preset to use (overrides --custom-velocity-cfg)",
 )
+parser.add_argument(
+    "--controller-frequency",
+    type=int,
+    default=30,
+    help="Controller frequency in Hz",
+)
 args, _ = parser.parse_known_args()
 
 FORCE_X_UNIT = args.force_x_unit
 CUSTOM_VELOCITY_CFG = True  # always use custom velocity cfg so commands are nonzero
 VELOCITY_PRESET = args.velocity_preset
+CONTROLLER_FREQUENCY = args.controller_frequency
 
 # Observation space configuration
 OBSERVATION_SCALE = 1.0
 OBSERVATION_OFFSET = 0.0
+
+# Observation labels matching isaac_lab_ref_keys_order from dataloader
+JOINT_NAMES = [
+    "LF_HAA", "LH_HAA", "RF_HAA", "RH_HAA",
+    "LF_HFE", "LH_HFE", "RF_HFE", "RH_HFE",
+    "LF_KFE", "LH_KFE", "RF_KFE", "RH_KFE",
+]
+OBS_LABELS = (
+    ["lin_vel_x", "lin_vel_y", "lin_vel_z",
+     "ang_vel_x", "ang_vel_y", "ang_vel_z",
+     "grav_x",    "grav_y",    "grav_z",
+     "cmd_vx",    "cmd_vy",    "cmd_yaw"]
+    + [f"jpos/{j}" for j in JOINT_NAMES]
+    + [f"jvel/{j}" for j in JOINT_NAMES]
+)
 
 # Controller configuration parameters
 ACTION_SCALE = 1.0
@@ -181,6 +209,9 @@ wandb.init(
         "velocity_preset": VELOCITY_PRESET,
         "num_simulation_steps": num_simulation_steps,
         "num_inference_steps": num_inference_steps,
+        "controller_inference_freq": CONTROLLER_FREQUENCY,
+        "diffuseloco_checkpoint": CHECKPOINT,
+        "diffuseloco_checkpoint_nickname": CHECKPOINT_NICKNAME,
     },
     name="inference",
 )
@@ -242,7 +273,7 @@ def run_simulation():
     obs_history.clear()
 
     global_step = 0
-    for i in tqdm.trange(0, num_simulation_steps, policy.n_action_steps, desc="Running inference"):
+    for i in tqdm.trange(0, num_simulation_steps, desc="Running inference"):
         # Process observation (once per planning call)
         curr_obs = obs["policy"].clone().detach()
         curr_obs = curr_obs.to(device=env.device, dtype=torch.float32)
@@ -277,77 +308,76 @@ def run_simulation():
         # Extract actions: (batch, n_action_steps, action_dim)
         actions_pred = result["action"]
 
-        # Execute all n_action_steps before re-planning
-        for step_i in range(policy.n_action_steps):
-            actions = actions_pred[:, step_i, :].to(env.device, dtype=torch.float32)
+        # Execute only the first action, then replan
+        actions = actions_pred[:, 0, :].to(env.device, dtype=torch.float32)
 
-            # Log joint observations and action predictions for robot 0
-            if wandb.run is not None:
-                log_dict = {"step": global_step}
-                for j in range(12):
-                    log_dict[f"robot_0/joint_pos/j{j}"] = curr_obs[0, 12 + j].item()
-                    log_dict[f"robot_0/joint_vel/j{j}"] = curr_obs[0, 24 + j].item()
-                    log_dict[f"robot_0/action/j{j}"] = actions[0, j].item()
-                wandb.log(log_dict)
+        # Log all 36 observations and actions for robot 0
+        if wandb.run is not None:
+            log_dict = {"step": global_step}
+            for i, label in enumerate(OBS_LABELS):
+                log_dict[f"robot_0/obs/{label}"] = curr_obs[0, i].item()
+            for j, jname in enumerate(JOINT_NAMES):
+                log_dict[f"robot_0/action/{jname}"] = actions[0, j].item()
+            wandb.log(log_dict)
 
-            obs, rew, terminated, truncated, info = env.step(actions)
-            cumulative_rewards += rew
+        obs, rew, terminated, truncated, info = env.step(actions)
+        cumulative_rewards += rew
 
-            # Track robot positions for distance calculation
-            if hasattr(env, "scene") and hasattr(env.scene, "robot"):
-                robot_root_state = env.scene["robot"].data.root_state_w
-                current_pos = robot_root_state[:, :3]
+        # Track robot positions for distance calculation
+        if hasattr(env, "scene") and hasattr(env.scene, "robot"):
+            robot_root_state = env.scene["robot"].data.root_state_w
+            current_pos = robot_root_state[:, :3]
 
-                if global_step > 0:
-                    delta_pos = torch.norm(current_pos - robot_positions, dim=1)
-                    for env_idx in range(env.num_envs):
-                        if episode_distances[env_idx]:
-                            episode_distances[env_idx][-1] += delta_pos[env_idx].item()
-                        else:
-                            episode_distances[env_idx].append(delta_pos[env_idx].item())
-
-                robot_positions = current_pos.clone()
-
-            # Track finalized episodes
-            if terminated.any() or truncated.any():
+            if global_step > 0:
+                delta_pos = torch.norm(current_pos - robot_positions, dim=1)
                 for env_idx in range(env.num_envs):
-                    if terminated[env_idx] or truncated[env_idx]:
-                        finalized_episode_rewards.append(cumulative_rewards[env_idx].item())
-                        episode_duration = global_step - episode_start_steps[env_idx].item()
-                        episode_durations[env_idx].append(episode_duration)
-                        cumulative_rewards[env_idx] = 0
-                        episode_start_steps[env_idx] = global_step
-                        episode_distances[env_idx].append(0.0)
+                    if episode_distances[env_idx]:
+                        episode_distances[env_idx][-1] += delta_pos[env_idx].item()
+                    else:
+                        episode_distances[env_idx].append(delta_pos[env_idx].item())
 
-            # Save camera frames
-            rgb_main = env.scene["tiled_camera"].data.output["rgb"]
-            img_main = rgb_main[0].cpu().numpy()
-            img_main = cv2.cvtColor(img_main, cv2.COLOR_RGB2BGR)
+            robot_positions = current_pos.clone()
 
-            add_main_camera_text(
-                img_main,
+        # Track finalized episodes
+        if terminated.any() or truncated.any():
+            for env_idx in range(env.num_envs):
+                if terminated[env_idx] or truncated[env_idx]:
+                    finalized_episode_rewards.append(cumulative_rewards[env_idx].item())
+                    episode_duration = global_step - episode_start_steps[env_idx].item()
+                    episode_durations[env_idx].append(episode_duration)
+                    cumulative_rewards[env_idx] = 0
+                    episode_start_steps[env_idx] = global_step
+                    episode_distances[env_idx].append(0.0)
+
+        # Save camera frames
+        rgb_main = env.scene["tiled_camera"].data.output["rgb"]
+        img_main = rgb_main[0].cpu().numpy()
+        img_main = cv2.cvtColor(img_main, cv2.COLOR_RGB2BGR)
+
+        add_main_camera_text(
+            img_main,
+            step=global_step,
+            cumulative_reward=cumulative_rewards.mean().item(),
+            actuation_mode=ACTUATION_MODE,
+            policy="diffuseloco",
+            exp_name="inference",
+        )
+        cv2.imwrite(f"{video_dir}/frame_{global_step}.png", img_main)
+
+        if ENABLE_CAMERAS:
+            rgb_front = env.scene["front_camera"].data.output["rgb"]
+            img_front = rgb_front[0].cpu().numpy()
+            img_front = cv2.cvtColor(img_front, cv2.COLOR_RGB2BGR)
+            add_front_camera_text(
+                img_front,
                 step=global_step,
-                cumulative_reward=cumulative_rewards.mean().item(),
                 actuation_mode=ACTUATION_MODE,
                 policy="diffuseloco",
                 exp_name="inference",
             )
-            cv2.imwrite(f"{video_dir}/frame_{global_step}.png", img_main)
+            cv2.imwrite(f"{video_dir}/front_{global_step}.png", img_front)
 
-            if ENABLE_CAMERAS:
-                rgb_front = env.scene["front_camera"].data.output["rgb"]
-                img_front = rgb_front[0].cpu().numpy()
-                img_front = cv2.cvtColor(img_front, cv2.COLOR_RGB2BGR)
-                add_front_camera_text(
-                    img_front,
-                    step=global_step,
-                    actuation_mode=ACTUATION_MODE,
-                    policy="diffuseloco",
-                    exp_name="inference",
-                )
-                cv2.imwrite(f"{video_dir}/front_{global_step}.png", img_front)
-
-            global_step += 1
+        global_step += 1
 
     # Create video
     video_path = "inference_demo.mp4"
@@ -425,6 +455,9 @@ def run_simulation():
 if ENV_TYPE == "warehouse":
     BaseEnvCfg = AnymalDWarehouseEnvCfg
     print("Using warehouse environment")
+elif ENV_TYPE == "rough":
+    BaseEnvCfg = AnymalDRoughEnvCfg
+    print("Using rough environment")
 else:
     BaseEnvCfg = AnymalDFlatEnvCfg
     print("Using flat environment")
@@ -463,6 +496,13 @@ def create_environment():
             )
         print("  Getting config...")
         env_cfg = env_cfg_creator.get_cfg()
+        # 30 Hz control policy (to match with DiffuseLoco paper)
+
+        DECIMATION = 10
+        PHYSICS_FREQUENCY = 10 * CONTROLLER_FREQUENCY
+
+        env_cfg.sim.dt = 1 / PHYSICS_FREQUENCY  # physics frequency
+        env_cfg.decimation = DECIMATION  # control frequency
         env_cfg.scene.num_envs = 64
         print("  Creating ManagerBasedRLEnv...")
         env = ManagerBasedRLEnv(cfg=env_cfg)
