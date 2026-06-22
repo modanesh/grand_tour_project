@@ -410,6 +410,56 @@ for robot_id in range(4096):
 
 ---
 
+## Justfile
+
+Common tasks are available as `just` recipes in `.justfile`. Requires [just](https://github.com/casey/just) and a `.env` file with `LAURENCE_WANDB_API_KEY` and `WANDB_ENTITY` set.
+
+### Prerequisites
+
+```bash
+# Install just (if not already installed)
+cargo install just
+# or: brew install just / winget install casey.just
+```
+
+### Running Inference
+
+All inference recipes run `demo_serve.py` with a pre-trained checkpoint. Arguments default to `velocity_preset="forward_only_slow"` and `env="flat"` unless overridden.
+
+```bash
+# Basic usage
+just <recipe> [velocity_preset] [controller_frequency] [env]
+
+# Example: run 50Hz full-mix model with stationary preset on rough terrain
+just run_inference_diffuseloco_50hz_full stationary 50 rough
+```
+
+| Recipe | Hz | Checkpoint |
+|--------|----|------------|
+| `run_inference_diffuseloco_30hz_full` | 30 | Full Grand Tour mix |
+| `run_inference_diffuseloco_50hz_full` | 50 | Full Grand Tour mix |
+| `run_inference_diffuseloco_20hz_full` | 20 | Full Grand Tour mix |
+| `run_inference_diffuseloco_30hz_flat` | 30 | Flat terrain subsample |
+| `run_inference_diffuseloco_30hz_rough` | 30 | Rough terrain subsample |
+| `run_inference_diffuseloco_50hz_isaaclab_may_14` | 50 | IsaacLab offline (May 14) |
+| `run_inference_diffuseloco_50hz_isaaclab_may_20` | 50 | IsaacLab offline (May 20) |
+| `run_inference_diffuseloco_50hz_grandtour_upsampling` | 50 | Grand Tour upsampled |
+| `run_inference_diffuseloco_50hz_grandtour_goal_condition` | 50 | Grand Tour goal-conditioned |
+| `run_inference_diffuseloco_50hz_grandtour_offset_one` | 50 | Grand Tour offset=1 |
+| `run_inference_diffuseloco_50hz_grandtour_offset_one_gravity_fix` | 50 | Offset=1 + gravity fix |
+| `run_inference_diffuseloco_50hz_grandtour_offset_one_gravity_fix_v2` | 50 | Offset=1 + gravity fix v2 |
+| `run_inference_diffuseloco_50hz_isaaclab_offset_one` | 50 | IsaacLab offset=1 |
+
+### IsaacLab RSL-RL Training
+
+```bash
+just run_isaaclab_anymal_d_quickstart
+```
+
+Activates the `isaaclab-2-0-2` conda environment and runs the IsaacLab ANYmal-D flat training with unscaled actions and noise-free observations (see the [IsaacLab RSL-RL Training with Overrides](#isaaclab-rsl-rl-training-with-overrides) section above for the full list of overrides applied).
+
+---
+
 ## Acknowledgments
 
 - [Grand Tour Dataset](https://huggingface.co/datasets/leggedrobotics/grand_tour_dataset) by Leggedrobotics
